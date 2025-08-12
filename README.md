@@ -2,6 +2,22 @@
 
 本人不是专业的,只是靠着ai学习,如有误还望大佬指出
 
+# 参数配置
+
+`PUBLIC_KEY_PEM` 公钥,抓包获取
+
+`SES_ID` =  抓包得到的id
+
+`LOGIN_NAME_PLAINTEXT`= "你的电话"
+
+`USER_ID_PLAINTEXT` = "你的电话"
+
+# 运行流程
+
+打开fiddler--配置好fiddler--打开雷电模拟器--登录杭工e家--进入抢券界面--启动程序  能够得到200的状态码说明步骤对了
+
+
+
 ## fiddler抓取雷电模拟器手机的包
 
 ### 1. 配置fiddler

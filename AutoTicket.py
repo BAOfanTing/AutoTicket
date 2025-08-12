@@ -16,8 +16,8 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCVXsxrrMcxNwFNYt0wMTdqc5WMa4gr7nMbWbcQCpJ2
 SIGN_KEY = "qwerqaz.-*"   # b775 里用的固定 signkey
 ENCRYPT_KEYS = ["login_name", "user_id"]  # 需要 3DES 加密的字段
 SES_ID = "df0b5ad2af0f440192cd764b79cb68f2"
-LOGIN_NAME_PLAINTEXT = "你的电话"
-USER_ID_PLAINTEXT = "你的电话"
+LOGIN_NAME_PLAINTEXT = "手机号"
+USER_ID_PLAINTEXT = "手机号"
 
 URL = "https://app.hzgh.org.cn/unionApp/interf/front/OL/OL41"
 
@@ -85,7 +85,8 @@ def build_payload():
     return data
 
 
-def job():
+# def job():
+def main():
     headers = {
         "Host": "app.hzgh.org.cn",
         "Connection": "keep-alive",
@@ -115,12 +116,22 @@ def job():
     print("响应:", resp.text)
 
 
-def main():
-    schedule.every().day.at(RUN_TIME).do(job)
+# def main():
+
+#     schedule.every().day.at(RUN_TIME).do(run_twice_with_delay)
     
-    while True:
-        schedule.run_pending()
-        time.sleep(1)
+#     while True:
+#         schedule.run_pending()
+#         time.sleep(1)
+
+
+# def run_twice_with_delay():
+#     # 在指定时间运行第一次
+#     job()
+#     # 等待0.5秒
+#     time.sleep(0.5)
+#     # 运行第二次
+#     job()
 
 
 if __name__ == "__main__":
