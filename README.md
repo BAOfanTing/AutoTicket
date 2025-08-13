@@ -2,15 +2,27 @@
 
 本人不是专业的,只是靠着ai学习,如有误还望大佬指出
 
+本来每天都能手动抢到,现在这app从6000张砍到1000张,连抢3天都没抢着,痛定思痛学习一下怎么上科技
+
+代码仓库:https://github.com/BAOfanTing/AutoTicket
+
+
+
+# 更新记录
+
+
+
+8.12中午11.30测试失败,感觉还是得抓个抢成功的包看看.
+
 # 参数配置
 
 `PUBLIC_KEY_PEM` 公钥,抓包获取
 
 `SES_ID` =  抓包得到的id
 
-`LOGIN_NAME_PLAINTEXT`= "你的电话"
+`LOGIN_NAME_PLAINTEXT`=抓包获取
 
-`USER_ID_PLAINTEXT` = "你的电话"
+`USER_ID_PLAINTEXT` = 抓包获取
 
 # 运行流程
 
@@ -356,6 +368,20 @@ if __name__ == "__main__":
 
 
 
+目前gpt给出的方法是在使用`root`或者`VirtualXposed`,查看本地数据包**LocalStorage** 文件,复制到电脑再用数据库打开搜索关键字.
+
+打开雷电模拟器设置--其他设置--开启root权限,下载`mt管理器`打开路径`/data/data/com.zjte.hanggongefamily/app_webview/Default/Local Storage/leveldb/`能够看到有个log文件,他就是我们需要的
+
+![image-20250813092124912](./image/image-20250813092124912.png)
+
+打开搜索`login_name`发现确实存在,但感觉像是加密过的,也不算明文,同时也能看到有很多的`ses_id`对应不同的对话,我清楚数据重新登录了一遍,这个`login_name`没有改变,基本可以确定这就是了
+
+![image-20250813093112715](./image/image-20250813093112715.png)
+
+把这个放入程序,得到的请求结果的login_name长度与抓包的得到的长度类似
+
+![image-20250813094250321](./image/image-20250813094250321.png)
+
 
 
 # 6 运行程序
@@ -363,4 +389,10 @@ if __name__ == "__main__":
 成功运行了,而且可以看到收到的回复和之前,直接拿点击按钮抓包发送的请求的回应差不多,就等到点测试了
 
 ![image-20250811174856064](./image/image-20250811174856064.png)
+
+8.12中午11.30测试失败,感觉还是得抓个抢成功的包看看.
+
+
+
+
 

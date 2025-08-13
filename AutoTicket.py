@@ -15,9 +15,9 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCVXsxrrMcxNwFNYt0wMTdqc5WMa4gr7nMbWbcQCpJ2
 
 SIGN_KEY = "qwerqaz.-*"   # b775 里用的固定 signkey
 ENCRYPT_KEYS = ["login_name", "user_id"]  # 需要 3DES 加密的字段
-SES_ID = "df0b5ad2af0f440192cd764b79cb68f2"
-LOGIN_NAME_PLAINTEXT = "手机号"
-USER_ID_PLAINTEXT = "手机号"
+SES_ID = "be59660b6f1541bdb1a95d22c9eb1188" # 登录后再退出,登录会发生变化
+LOGIN_NAME_PLAINTEXT = "HFbSkQ7f/BeguGThXNyVwQ=="
+USER_ID_PLAINTEXT = "HFbSkQ7f/BeguGThXNyVwQ=="
 
 URL = "https://app.hzgh.org.cn/unionApp/interf/front/OL/OL41"
 
