@@ -12,9 +12,6 @@ from Crypto.PublicKey import RSA
 PUBLIC_KEY_PEM = """-----BEGIN PUBLIC KEY-----
 MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCVXsxrrMcxNwFNYt0wMTdqc5WMa4gr7nMbWbcQCpJ2XNBMTQetknYNzCr8MMRdHBKFKjdCJE40u6UDBXQx13z7OSKyvQBwtLj5n8eIQXRtpMIjvqfR1xRuNBi5147ZXJDbKxWGRm0kjLN5UuqnDe6zu8v6MKU7KNDzHUrWqsj2LwIDAQAB
 -----END PUBLIC KEY-----"""
-
-SIGN_KEY = "qwerqaz.-*"
-ENCRYPT_KEYS = ["login_name", "user_id"]   # 这俩需要 3DES(m) 加密
 URL = "https://app.hzgh.org.cn/unionApp/interf/front/OL/OL41"
 
 # ！！！把下面三项替换成 localStorage["login"] 明文里的真实值
@@ -32,7 +29,6 @@ URL = "https://app.hzgh.org.cn/unionApp/interf/front/OL/OL41"
 # 指定运行时间 (HH:MM)
 RUN_TIME = "11:30"
 # ============================================
-
 
 def rand_str(n):
     return ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(n))
@@ -57,8 +53,26 @@ def des3_ecb_pkcs7_encrypt(key24, plaintext):
 
 
 def build_payload():
-    # 1. b + c 合并（顺序严格保持）
-    l = {
+    """
+    Builds the complete API request payload.
+    修正了签名生成逻辑：
+    - 严格按照固定顺序拼接参数，以确保与服务器端签名算法一致。
+    """
+    # 1. 定义 payload 的所有键和它们的固定顺序
+    ordered_keys = [
+        "channel",
+        "app_ver_no",
+        "timestamp",
+        "login_name",
+        "user_id",
+        "ses_id",
+        "exchange_id",
+        "dec_key"
+    ]
+
+    # 2. 创建一个有序的字典来存储初始值
+    #    这里使用一个列表来保持顺序
+    payload = {
         "channel": CHANNEL,
         "app_ver_no": APP_VER_NO,
         "timestamp": int(time.time() * 1000),
@@ -68,29 +82,33 @@ def build_payload():
         "exchange_id": "10"
     }
 
-    # 2. 生成 m
+    # 3. 生成 3DES 加密密钥 m
     m = rand_str(24).upper()
 
-    # 3. 加 dec_key
-    l["dec_key"] = rsa_encrypt(PUBLIC_KEY_PEM, m)
+    # 4. 对 m 进行 RSA 公钥加密，生成 dec_key 并添加到 payload
+    payload["dec_key"] = rsa_encrypt(PUBLIC_KEY_PEM, m)
 
-    # 4. 对 ENCRYPT_KEYS 做 3DES 加密
+    # 5. 对 ENCRYPT_KEYS 列表中的字段进行 3DES 加密
     for k in ENCRYPT_KEYS:
-        l[k] = des3_ecb_pkcs7_encrypt(m, l[k])
+        payload[k] = des3_ecb_pkcs7_encrypt(m, payload[k])
 
-    # 5. 计算 sign（不含 sign、不含 key）
-    values_concat = "".join(str(v) for v in l.values())
-    md5_hex = hashlib.md5((values_concat + SIGN_KEY).encode()).hexdigest().upper()
-    sign = hashlib.sha256(md5_hex.encode()).hexdigest().upper()
+    # 6. 按照固定顺序拼接所有参数的值（不含 sign 和 key）
+    values_to_sign = [str(payload[k]) for k in ordered_keys]
+    values_concat = "".join(values_to_sign)
 
-    # 6. 生成 key（必须在 sign 之后加）
-    key_csv = ",".join(l.keys())
+    # 7. 计算签名 sign
+    md5_hex = hashlib.md5((values_concat + SIGN_KEY).encode('utf-8')).hexdigest().upper()
+    sign = hashlib.sha256(md5_hex.encode('utf-8')).hexdigest().upper()
 
-    # 7. 最终加上 key 和 sign
-    l["key"] = key_csv
-    l["sign"] = sign
+    # 8. 生成 key 字段（必须在签名之后添加）
+    key_csv = ",".join(ordered_keys)
 
-    return l
+    # 9. 最终将 key 和 sign 添加到 payload 中
+    payload["key"] = key_csv
+    payload["sign"] = sign
+
+    return payload
+
 
 
 # ================== 解密过程 ==================
