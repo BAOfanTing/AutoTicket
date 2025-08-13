@@ -10,7 +10,7 @@
 
 # 更新记录
 
-
+8.13 能够解密回应消息,更好排查
 
 8.12中午11.30测试失败,感觉还是得抓个抢成功的包看看.
 
@@ -24,17 +24,19 @@
 
 `USER_ID_PLAINTEXT` = 抓包获取
 
+`exchange_id`  9是2块地铁券  10是4块地铁券   11是6块地铁券
+
 # 运行流程
 
 打开fiddler--配置好fiddler--打开雷电模拟器--登录杭工e家--进入抢券界面--启动程序  能够得到200的状态码说明步骤对了
 
 
 
-## fiddler抓取雷电模拟器手机的包
+# fiddler抓取雷电模拟器手机的包
 
-### 1. 配置fiddler
+# 1. 配置fiddler
 
-#### 1.1 导出CA证书
+## 1.1 导出CA证书
 
 HTTPS--这个几个勾上,然后Actions选择Export to desktop把ca证书导出到桌面
 
@@ -46,13 +48,13 @@ HTTPS--这个几个勾上,然后Actions选择Export to desktop把ca证书导出�
 
 <img src="./image/image-20250808151548827.png" alt="image-20250808151548827" style="zoom:50%;" />
 
-#### 1.2 配置fiddler允许远程连接
+## 1.2 配置fiddler允许远程连接
 
 connections--勾选Allow remote computers to connect  开启远程连接监控,端口是8888
 
 ![image-20250808142039727](./image/image-20250808142039727.png)
 
-### 2 模拟器参数配置
+# 2 模拟器参数配置
 
 电脑打开cmd,输入`ipconfig`查看自己的ipv4地址
 
@@ -78,7 +80,7 @@ connections--勾选Allow remote computers to connect  开启远程连接监控,�
 
 
 
-## 3.抓包抢券的接口
+# 3.抓包抢券的接口
 
 此时我点击抢优惠券,发出的请求是这个
 
@@ -382,17 +384,91 @@ if __name__ == "__main__":
 
 ![image-20250813094250321](./image/image-20250813094250321.png)
 
+把db文件打开,也能发现,这个就是
 
+![image-20250813141225770](./image/image-20250813141225770.png)
 
-# 6 运行程序
+## 5.5 运行程序
 
 成功运行了,而且可以看到收到的回复和之前,直接拿点击按钮抓包发送的请求的回应差不多,就等到点测试了
 
 ![image-20250811174856064](./image/image-20250811174856064.png)
 
-8.12中午11.30测试失败,感觉还是得抓个抢成功的包看看.
 
 
 
 
+# 6 解密回应
+
+在我们点击发送会会给一个base64的回应,把他进行解密,来看我们的加密对不对
+
+```python
+import base64
+from Crypto.Cipher import PKCS1_v1_5, DES3
+from Crypto.PublicKey import RSA
+import json
+
+PRIVATE_KEY_PEM = """-----BEGIN RSA PRIVATE KEY-----
+MIICdQIBADANBgkqhkiG9w0BAQEFAASCAl8wggJbAgEAAoGBAIOBMtf2AIYQlrNy
+/lVPHx4R/LKI+Vtk3bKmzID8vdVnh/4WA3lczqfejM10Xfy3sNe4l5EeQTvnDgUH
+bIFK8FyJRpvypAmS9oyW6uwGTjZEu5Y6hsSxiGAOG5ZOlH8vOSfuaAkZ+iUlqifP
+E3ZOmHkqGzmukg4wCRaPLx5ioq8zAgMBAAECgYAgLOVmx677HmXxBCrMbq57agU9
+HZx9SyGfS4Zv7Ob5pvo0Jei1sgpyMlabEmTIp50iOu0CubdWU8MvYdCfldlXQLW7
+cjk8N1NyGQLFd2fJ03a7gGWnwwEdPoNTpSHnB+mDL9l7MVjion5fLojzq9Pz1gMK
+L01I2TfZBDL4m6EbgQJBAMfgrMKtj7f40GA3qp/y/9/eBCAu8PbtFmtATLMQRf4t
+Ghjvn349x1b6FZj8RiaRBSrq0Owjrdo5TUxgfS7dz3MCQQCobdWk2SQhRlqEHfFE
+ro/8ab6gn3GhBDzzKvNjhKr2MO6JWqs+Vr+/P9uYpA+G+rv74uVIGWhjuNtI5+/6
+9DFBAkAJOQS/tuJ6yrBSwD7PQpcr7UKjeYcE3cu7ByyC1q1kHRCnNedWG+Omz8NP
+W9Sg0vA6GrupKbxL5Xj7nTgpgXKhAkBIVlvioAvfaqrngUClAd//RZ9EtxYDVKGk
+wnaj8E/Iyr04KsPPU0ypJBD5XsT4cOmZxho5PAhUhAlSJ6MvAf/BAkA64ieVhtQA
+1KV0pSSEJMnbPlZe+yBYGTWLMaG2zL0kKEhIs2fIHbVhLFQ8TkO5oH+mhxuuXI5+
+nVU2G0dqUl6D
+-----END RSA PRIVATE KEY-----"""
+
+DES_IV = b"12345678"
+
+# ================== 解密函数 ==================
+def pkcs7_unpad(data):
+    pad_len = data[-1]
+    return data[:-pad_len]
+
+def decrypt_data2(data2):
+    # 1. 提取前 172 字节（Base64解码前是字符串长度172，解码后是RSA块）
+    rsa_enc = data2[:172]
+    des_enc = data2[172:]
+
+    # Base64 decode
+    rsa_enc_bytes = base64.b64decode(rsa_enc)
+    des_enc_bytes = base64.b64decode(des_enc)
+
+    # 2. RSA 私钥解密，得到 a
+    rsakey = RSA.importKey(PRIVATE_KEY_PEM)
+    cipher_rsa = PKCS1_v1_5.new(rsakey)
+    a_bytes = cipher_rsa.decrypt(rsa_enc_bytes, None)
+    a = a_bytes.decode()
+
+    # 3. 构造 3DES key 和 iv
+    key = ("HTt0Hzsu" + a).encode()
+    iv = a[:8].encode()
+
+    # 4. 3DES CBC PKCS7 解密
+    cipher_des3 = DES3.new(key, DES3.MODE_CBC, iv)
+    decrypted = cipher_des3.decrypt(des_enc_bytes)
+    decrypted = pkcs7_unpad(decrypted)
+
+    # 5. 转成 JSON
+    return decrypted.decode()
+
+# 示例
+data2_str = "Gx6vn2AcOSx0OgNWgVBnF6pE2WPUdl4PBl5BfT/Lv5tq3Yf7MsDMXGlvHwySfIvMnFMl6dwvtyjyAmuaQbqo+yB3lAgJ7sQb1kkhmpNZXrWGn31b1iYxqoZyRIOrGMDAoK5CNUjgF/VTaPxY9a5ypNUSWNVWUg7GtzAa+O7FHa4=xpg4u/l6MffuKk8aHF8fv90LdtzYt/oaqQon2qekZfqCmKpuJkQt/eyhO5g0OPID8pphMpu+qhDWGicQdkh5q3foqwrh3IgRy5kH1mulC7s="
+print(decrypt_data2(data2_str))
+```
+
+可以看到运行后,他成功打印了消息,
+
+![image-20250813155139721](./image/image-20250813155139721.png)
+
+我们再次运行之前的程序,他的回应是数字签名错误,因此只要显示的是优惠券被抢光了,就说明我们的代码正确了
+
+![image-20250813160803490](./image/image-20250813160803490.png)
 
