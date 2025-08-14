@@ -4,107 +4,141 @@ import random
 import string
 import base64
 import hashlib
-import schedule
-from Crypto.Cipher import DES3, PKCS1_v1_5
+import schedule # 如果您需要定时任务，请保留
+
+# 确保您已经正确安装了pycryptodome
+# pip uninstall crypto pycrypto
+# pip install pycryptodome
 from Crypto.PublicKey import RSA
-# from gmssl import sm2, func  # 这次不走 SM2
+from Crypto.Signature import pkcs1_15y
+from Cryptodome.Hash import SHA256
+from Crypto.Cipher import DES3, PKCS1_v1_5
+from Crypto.Util.Padding import pad, unpad
 
 # ================= 配置区域 =================
-PUBLIC_KEY_PEM = """-----BEGIN PUBLIC KEY-----
+
+# 【密钥1】用于加密3DES密钥的【公钥】
+ENCRYPTION_PUBLIC_KEY_PEM = """-----BEGIN PUBLIC KEY-----
 MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCVXsxrrMcxNwFNYt0wMTdqc5WMa4gr7nMbWbcQCpJ2XNBMTQetknYNzCr8MMRdHBKFKjdCJE40u6UDBXQx13z7OSKyvQBwtLj5n8eIQXRtpMIjvqfR1xRuNBi5147ZXJDbKxWGRm0kjLN5UuqnDe6zu8v6MKU7KNDzHUrWqsj2LwIDAQAB
 -----END PUBLIC KEY-----"""
+
+# 【密钥2】用于RSA签名的【签名私钥】(从JS的B函数中提取)
+SIGNING_PRIVATE_KEY_PEM = """-----BEGIN PRIVATE KEY-----
+MIICeAIBADANBgkqhkiG9w0BAQEFAASCAmIwggJeAgEAAoGBAJ+C8Z9awsGU8DeB
+pq47p+pVBgIxWr9epYE5lTrVwoTvOv7dOBTsNgYPgDqFLbU8eZsV26DOvgd4TC5t
+ZUWF7WbAleOcxvwA143XTBpZEeDx6who8KiW1WBKUwkeEfXZvOWhN2d+8GlCjvJu
+2J4yNGEXScQEIWb+ofE4Pd4yPkkzAgMBAAECgYB0Tzu18a0vEFX0c1JBm3g98w81
+jB1aiz3tMzqwMuvqmLIQ4uegwfhGhQkAItoIW/dj8RU7dWS096+87sG4ZwaKCv/S
+mT1CibqmSATrX6YNIFU4uXsZzMREJxmZi+V5AllT9DWBG5YjKgrGfWjL0Rq10Zvx
+YMTdjO+SbqDIjVoc+QJBAOrMXRO6G349NpLvo1QPevxIykKNKhr5Qkjv4oVydoVo
+HW6iMU30PhrBqBYla+K8W+xyeqrjd9ucDQFW/Z2+hD8CQQCt6jz4o7qadQM0giko
+BsgWwp7teyZI/8ZH5htrKZwDJzUe6LuM9xjDeXAqqjNjQrDL7M+6T7ZwMmK3UN3b
+oe4NAkEA6ioGabYh1TSXSNNVwG/v58twbA78/wm34aXb89rD+Shssflv0p7TkTuxt
+uR7RBU2WAmT7PoOfyaSkdN/++IVYQJBAJ/klCvQc/YfkFPNO0N2gK0UP4N8zmUc
+6tIdh6XNeocXm+oP9KaUYusMkghXtKkUnnDOBul28fdTC5kYOvD7fl0CQQDLIYfo
+8MSMgcFkBH1wRUbhjVv31bk8+4G9a+h7UkLdLtch5qPsS7bsFCyszqEYjhYtQ278
+Q20lSzaIsom0Q3ai
+-----END PRIVATE KEY-----"""
+
+# 【密钥3】用于拼接在签名数据末尾的【签名字符串】
+SIGN_KEY_NEW = "zSw3MLRV7VuwT!*G"
+
+# JS代码中定义的需要加密的字段和不需要签名的字段
+ENCRYPT_KEYS = ["login_name", "user_id"]
+NO_SIGN_KEYS = [
+    "answerContent", "surveyId", "content", "preContent", "img", "img1",
+    "img2", "package", "codeUrl", "belong", "verCode"
+]
+
 URL = "https://app.hzgh.org.cn/unionApp/interf/front/OL/OL41"
 
-# ！！！把下面三项替换成 localStorage["login"] 明文里的真实值
-CHANNEL = "02"                 # Android=02
-APP_VER_NO = "3.1.4"          # 你 App 里看到的 version
+# ！！！请务必将下面四项替换成您的真实值！！！
+CHANNEL = "02"
+APP_VER_NO = "3.1.4"
+SES_ID = "be59660b6f1541bdb1a95d22c9eb1188" # 替换成您的
 
-SIGN_KEY = "qwerqaz.-*"       # b775 里用的固定 signkey
-ENCRYPT_KEYS = ["login_name", "user_id"]  # 需要 3DES 加密的字段
-SES_ID = "be59660b6f1541bdb1a95d22c9eb1188"
 LOGIN_NAME_PLAINTEXT = "HFbSkQ7f/BeguGThXNyVwQ=="
 USER_ID_PLAINTEXT = "HFbSkQ7f/BeguGThXNyVwQ=="
 
-# 指定运行时间 (HH:MM)
-RUN_TIME = "11:30"
-# ============================================
+
+# =================================================================
 
 def rand_str(n):
     return ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(n))
 
-def rsa_encrypt_b64(pub_pem, s: str) -> str:
+def rsa_encrypt(pub_pem, s):
     rsakey = RSA.importKey(pub_pem)
     cipher = PKCS1_v1_5.new(rsakey)
-    return base64.b64encode(cipher.encrypt(s.encode())).decode()
-
-def rsa_encrypt_bytes_b64(pub_pem, raw_bytes: bytes) -> str:
-    rsakey = RSA.importKey(pub_pem)
-    cipher = PKCS1_v1_5.new(rsakey)
-    return base64.b64encode(cipher.encrypt(raw_bytes)).decode()
+    return base64.b64encode(cipher.encrypt(s.encode('utf-8'))).decode('utf-8')
 
 def des3_ecb_pkcs7_encrypt(key24, plaintext):
-    key_bytes = key24.encode()
-    try:
-        cipher = DES3.new(key_bytes, DES3.MODE_ECB)
-    except ValueError:
-        from Crypto.Cipher.DES3 import adjust_key_parity
-        key_bytes = adjust_key_parity(key_bytes)
-        cipher = DES3.new(key_bytes, DES3.MODE_ECB)
-    pad_len = 8 - (len(plaintext) % 8)
-    padded = plaintext + chr(pad_len) * pad_len
-    return base64.b64encode(cipher.encrypt(padded.encode())).decode()
+    key_bytes = key24.encode('utf-8')
+    cipher = DES3.new(key_bytes, DES3.MODE_ECB)
+    # 使用pycryptodome自带的pad函数进行PKCS7填充
+    padded_data = pad(plaintext.encode('utf-8'), DES3.block_size, style='pkcs7')
+    encrypted = cipher.encrypt(padded_data)
+    return base64.b64encode(encrypted).decode('utf-8')
+
+def rsa_sha256_sign(private_key_pem, data_string):
+    """使用私钥对数据进行SHA256withRSA签名，并返回Base64结果"""
+    key = RSA.import_key(private_key_pem)
+    h = SHA256.new(data_string.encode('utf-8'))
+    signature = pkcs1_15.new(key).sign(h)
+    return base64.b64encode(signature).decode('utf-8')
 
 def build_payload():
     """
-    使用 “MD5→upper→SHA1→RSA(PKCS1_v1_5加密)→Base64”的签名，长度恒为 172。
+    完全模拟JS端的加密和签名逻辑
+    流程: 准备数据 -> 过滤空值 -> 加密 -> 过滤不签名字段 -> RSA签名
     """
-    ordered_keys = [
-        "channel",
-        "app_ver_no",
-        "timestamp",
-        "login_name",
-        "user_id",
-        "ses_id",
-        "exchange_id",
-        "dec_key"
-    ]
-
+    # 1. 准备所有参数
     payload = {
         "channel": CHANNEL,
         "app_ver_no": APP_VER_NO,
-        "timestamp": int(time.time() * 1000),
-        "login_name": LOGIN_NAME_PLAINTEXT,
-        "user_id": USER_ID_PLAINTEXT,
-        "ses_id": SES_ID,
-        "exchange_id": "10"
+        "timestamp": int(time.time() * 1000)
     }
+    if LOGIN_NAME_PLAINTEXT: payload["login_name"] = LOGIN_NAME_PLAINTEXT
+    if USER_ID_PLAINTEXT: payload["user_id"] = USER_ID_PLAINTEXT
+    if SES_ID: payload["ses_id"] = SES_ID
+    payload["exchange_id"] = "10"
 
-    # 3DES key（24位）
+    # 2. 过滤空值 (模拟JS的M()函数)
+    filtered_payload = {}
+    for key, value in payload.items():
+        if value is not None and value != "":
+            filtered_payload[key] = value
+        elif isinstance(value, (int, float)) and value == 0:
+            filtered_payload[key] = value
+    payload = filtered_payload
+
+    # 3. 生成并加密3DES密钥
     m = rand_str(24).upper()
+    dec_key = rsa_encrypt(ENCRYPTION_PUBLIC_KEY_PEM, m)
+    payload["dec_key"] = dec_key
 
-    # dec_key = RSA 公钥加密(m) → Base64
-    payload["dec_key"] = rsa_encrypt_b64(PUBLIC_KEY_PEM, m)
+    # 4. 加密指定字段
+    for key in ENCRYPT_KEYS:
+        if key in payload:
+            payload[key] = des3_ecb_pkcs7_encrypt(m, str(payload[key]))
 
-    # 加密敏感字段（3DES-ECB-PKCS7）
-    for k in ENCRYPT_KEYS:
-        if k in payload and payload[k] is not None:
-            payload[k] = des3_ecb_pkcs7_encrypt(m, payload[k])
+    # 5. 准备签名字段 (移除不参与签名的key)
+    payload_for_signing = payload.copy()
+    for key in NO_SIGN_KEYS:
+        if key in payload_for_signing:
+            del payload_for_signing[key]
 
-    # 按 key 顺序拼接参与签名的值
-    values_to_sign = [str(payload[k]) for k in ordered_keys]
-    values_concat = "".join(values_to_sign)
+    # Python 3.7+ 字典保持插入顺序，这与JS的Object.keys()行为一致
+    keys_for_sign = list(payload_for_signing.keys())
+    values_for_sign = [str(v) for v in payload_for_signing.values()]
 
-    # ========= 关键改动：172 位 RSA-Base64 签名 =========
-    # tmp = MD5(... + SIGN_KEY).upper()
-    md5_upper = hashlib.md5((values_concat + SIGN_KEY).encode("utf-8")).hexdigest().upper()
-    # digest = SHA1(tmp.encode())  → 20 bytes
-    sha1_digest = hashlib.sha1(md5_upper.encode("utf-8")).digest()
-    # sign = Base64( RSA-PKCS1_v1_5-Encrypt( sha1_digest ) ) → 172 chars
-    sign_b64 = rsa_encrypt_bytes_b64(PUBLIC_KEY_PEM, sha1_digest)
-    # ==================================================
+    # 6. 【核心】计算正确的RSA签名
+    values_concat = "".join(values_for_sign)
+    string_to_sign = values_concat + SIGN_KEY_NEW
+    sign = rsa_sha256_sign(SIGNING_PRIVATE_KEY_PEM, string_to_sign)
 
-    payload["key"] = ",".join(ordered_keys)
-    payload["sign"] = sign_b64
+    # 7. 组装最终请求体
+    payload["key"] = ",".join(keys_for_sign)
+    payload["sign"] = sign
 
     return payload
 
