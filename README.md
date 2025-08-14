@@ -1,10 +1,6 @@
----
-typora-copy-images-to: upload
----
-
 # 杭工e家app地铁券
 
-本人不是专业的,只是靠着ai学习,如有误还望大佬指出
+本人不是专业的,只是靠着ai学习,如有误还望大佬指出,文章提供思路,完整代码请查看仓库
 
 本来每天都能手动抢到,现在这app从6000张砍到1000张,连抢3天都没抢着,痛定思痛学习一下怎么上科技
 
@@ -13,6 +9,8 @@ typora-copy-images-to: upload
 
 
 # 更新记录
+
+8.14 解决数字签名错误问题,回应变为,积分兑换-活动购买失败
 
 8.13 能够解密回应消息,更好排查,发现sign构建的比官方的短很多,问题应该在这
 
@@ -24,9 +22,9 @@ typora-copy-images-to: upload
 
 `SES_ID` =  抓包得到的id
 
-`LOGIN_NAME_PLAINTEXT`=抓包获取
+`LOGIN_NAME_PLAINTEXT`=模拟器本地文件查看获取
 
-`USER_ID_PLAINTEXT` = 抓包获取
+`USER_ID_PLAINTEXT` = 模拟器本地文件查看获取
 
 `exchange_id`  9是2块地铁券  10是4块地铁券   11是6块地铁券
 
@@ -476,3 +474,8 @@ print(decrypt_data2(data2_str))
 
 ![image-20250813160803490](https://gitee.com/baofanting/image/raw/master/image/20250814091612895.png)
 
+## 6.1 回应显示 积分抢购失败
+
+可以看到数字签名的错误已经被解决了,现在显示的是`积分兑换-活动购买失败`,但是我自己手动点击显示的是优惠券被抢光了,目前未知是否能行
+
+![image-20250814102114944](https://gitee.com/baofanting/image/raw/master/image/20250814102259932.png)

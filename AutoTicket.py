@@ -10,7 +10,7 @@ import schedule # 如果您需要定时任务，请保留
 # pip uninstall crypto pycrypto
 # pip install pycryptodome
 from Crypto.PublicKey import RSA
-from Crypto.Signature import pkcs1_15y
+from Crypto.Signature import pkcs1_15
 from Cryptodome.Hash import SHA256
 from Crypto.Cipher import DES3, PKCS1_v1_5
 from Crypto.Util.Padding import pad, unpad
@@ -59,6 +59,7 @@ SES_ID = "be59660b6f1541bdb1a95d22c9eb1188" # 替换成您的
 
 LOGIN_NAME_PLAINTEXT = "HFbSkQ7f/BeguGThXNyVwQ=="
 USER_ID_PLAINTEXT = "HFbSkQ7f/BeguGThXNyVwQ=="
+EXCHANGE_ID_PLAINTEXT = "10"
 
 
 # =================================================================
@@ -100,7 +101,7 @@ def build_payload():
     if LOGIN_NAME_PLAINTEXT: payload["login_name"] = LOGIN_NAME_PLAINTEXT
     if USER_ID_PLAINTEXT: payload["user_id"] = USER_ID_PLAINTEXT
     if SES_ID: payload["ses_id"] = SES_ID
-    payload["exchange_id"] = "10"
+    payload["exchange_id"] = EXCHANGE_ID_PLAINTEXT
 
     # 2. 过滤空值 (模拟JS的M()函数)
     filtered_payload = {}
@@ -193,9 +194,7 @@ def main():
         "Host": "app.hzgh.org.cn",
         "Connection": "keep-alive",
         "Accept": "application/json, text/plain, */*",
-        "User-Agent": "Mozilla/5.0 (Linux; Android 9; SKW-A0 Build/PQ3A.190705.08061357; wv) "
-                      "AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/91.0.4472.114 "
-                      "Safari/537.36;unionApp;HZGH",
+        "User-Agent": "Mozilla/5.0 (Linux; Android 9; SKW-A0 Build/PQ3A.190705.08061357; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/91.0.4472.114 Mobile Safari/537.36;unionApp;HZGH",
         "Content-Type": "application/json;charset=UTF-8",
         "Origin": "https://app.hzgh.org.cn:8123",
         "X-Requested-With": "com.zjte.hanggongefamily",

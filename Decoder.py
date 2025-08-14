@@ -55,5 +55,5 @@ def decrypt_data2(data2):
     return decrypted.decode()
 
 # 示例
-data2_str = "Gx6vn2AcOSx0OgNWgVBnF6pE2WPUdl4PBl5BfT/Lv5tq3Yf7MsDMXGlvHwySfIvMnFMl6dwvtyjyAmuaQbqo+yB3lAgJ7sQb1kkhmpNZXrWGn31b1iYxqoZyRIOrGMDAoK5CNUjgF/VTaPxY9a5ypNUSWNVWUg7GtzAa+O7FHa4=xpg4u/l6MffuKk8aHF8fv90LdtzYt/oaqQon2qekZfqCmKpuJkQt/eyhO5g0OPID8pphMpu+qhDWGicQdkh5q3foqwrh3IgRy5kH1mulC7s="
+data2_str = "ZMZdQtPNckXKIwjvIHZksLwB+AuoKrVmrpsw6UpwpJbM55KXi98zRtKRdgvJMC+pz5akM7n3ruUC2qovkdMoxqDsl+Z1LIkeF2fBezDWZ3oJRDqBVxrIk/VLEJ8YcIzhPqtp9JYXAnC46kO3oJUV6fDeOZctByY15YO49RD0Ru0=fsVCZFfnpRO/YUinIvakdTaqMbWg+MUHGw4bWFrH3QWiioF1vzNh5/wxyF5pob2uFMU8gUC0Ch57dFzzstKBi6aAE2XMQvGxSPyv7zU7G20="}"
 print(decrypt_data2(data2_str))
