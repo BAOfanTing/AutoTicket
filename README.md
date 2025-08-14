@@ -478,7 +478,7 @@ print(decrypt_data2(data2_str))
 
 ## 6.1 回应显示 积分抢购失败
 
-可以看到数字签名的错误已经被解决了,现在显示的是`积分兑换-活动购买失败`,但是我自己手动点击显示的是优惠券被抢光了,也就是说服务器啥的都已经打通了,加密结果也对,然后ses_id,login_name,user_id,也是对的,难道是公钥?
+之前的加密规则有点问题,导致sign不是172的字符床,修改后可以看到数字签名的错误已经被解决了,现在显示的是`积分兑换-活动购买失败`,但是我自己手动点击显示的是优惠券被抢光了,也就是说服务器啥的都已经打通了,加密结果也对,然后ses_id,login_name,user_id,也是对的,难道是公钥?
 
 ![image-20250814102114944](https://gitee.com/baofanting/image/raw/master/image/20250814102259932.png)
 
@@ -487,3 +487,9 @@ print(decrypt_data2(data2_str))
 替换后运行,果然成功了,成功显示了`手慢,优惠券被抢光`和点击的效果一致
 
 ![image-20250814132451293](https://gitee.com/baofanting/image/raw/master/image/20250814132810495.png)
+
+# 7 抢票实战
+
+这网还是很卡,5点准时抢显示火爆,我发现我的积分少了5个,但是没有票绝了,然后浏览了一个新闻积分又加回来了
+
+![image-20250814170416147](https://gitee.com/baofanting/image/raw/master/image/20250814171002794.png)

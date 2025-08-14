@@ -55,7 +55,7 @@ URL = "https://app.hzgh.org.cn/unionApp/interf/front/OL/OL41"
 # ！！！请务必将下面四项替换成您的真实值！！！
 CHANNEL = "02"
 APP_VER_NO = "3.1.4"
-SES_ID = "be59660b6f1541bdb1a95d22c9eb1188" # 替换成您的
+SES_ID = "9ff35eb927a14410b971ac1e2c2e4f2d" # 替换成您的
 
 LOGIN_NAME_PLAINTEXT = "HFbSkQ7f/BeguGThXNyVwQ=="
 USER_ID_PLAINTEXT = "HFbSkQ7f/BeguGThXNyVwQ=="
@@ -209,13 +209,13 @@ def main():
     }
 
     payload = build_payload()
-    print("请求数据:", payload)
-    # 自检：签名长度应为 172
-    print("sign 长度:", len(payload.get("sign","")))
+    # print("请求数据:", payload)
+    # # 自检：签名长度应为 172
+    # print("sign 长度:", len(payload.get("sign","")))
 
     resp = requests.post(URL, headers=headers, json=payload, verify=False, proxies=proxies)
     print("状态码:", resp.status_code)
-    print("响应:", resp.text)
+    # print("响应:", resp.text)
     try:
         resp_json = resp.json()
         if "data2" in resp_json:
