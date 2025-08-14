@@ -1,3 +1,7 @@
+---
+typora-copy-images-to: upload
+---
+
 # 杭工e家app地铁券
 
 本人不是专业的,只是靠着ai学习,如有误还望大佬指出
@@ -40,41 +44,41 @@
 
 HTTPS--这个几个勾上,然后Actions选择Export to desktop把ca证书导出到桌面
 
-![image-20250808141430472](./image/image-20250808141430472.png)
+![image-20250808141430472](https://gitee.com/baofanting/image/raw/master/image/20250814091612868.png)
 
-![image-20250808141607651](./image/image-20250808141607651.png)
+![image-20250808141607651](https://gitee.com/baofanting/image/raw/master/image/20250814091612869.png)
 
 双击安装证书---当前用户----将所有证书放入下列存储(受信任的)--完成
 
-<img src="./image/image-20250808151548827.png" alt="image-20250808151548827" style="zoom:50%;" />
+<img src="https://gitee.com/baofanting/image/raw/master/image/20250814091612870.png" alt="image-20250808151548827" style="zoom:50%;" />
 
 ## 1.2 配置fiddler允许远程连接
 
 connections--勾选Allow remote computers to connect  开启远程连接监控,端口是8888
 
-![image-20250808142039727](./image/image-20250808142039727.png)
+![image-20250808142039727](https://gitee.com/baofanting/image/raw/master/image/20250814091612872.png)
 
 # 2 模拟器参数配置
 
 电脑打开cmd,输入`ipconfig`查看自己的ipv4地址
 
-![image-20250808142417511](./image/image-20250808142417511.png)
+![image-20250808142417511](https://gitee.com/baofanting/image/raw/master/image/20250814091612873.png)
 
 打开模拟器浏览器输入`http://192.168.1.168:8888`可以看到这样的界面,点击下方下载证书
 
-![image-20250808142643651](./image/image-20250808142643651.png)
+![image-20250808142643651](https://gitee.com/baofanting/image/raw/master/image/20250814091612874.png)
 
 直接浏览器下载打开安装,设置名称为fiddler.途中会让你设置一个锁屏密码
 
-![image-20250808143036870](./image/image-20250808143036870.png)
+![image-20250808143036870](https://gitee.com/baofanting/image/raw/master/image/20250814091612875.png)
 
 设置连接的wifi代理,主机名就是你的ipv4地址,端口号就是8888
 
-<img src="./image/image-20250808143548184.png" alt="image-20250808143548184" style="zoom:50%;" />
+<img src="https://gitee.com/baofanting/image/raw/master/image/20250814091612876.png" alt="image-20250808143548184" style="zoom:50%;" />
 
 保存后我们打开一些应用,在fiddler中可以看到抓包信息,ld9box就是雷电模拟器9发出的http,这个hzgh应该是我打开的杭工e家app
 
-<img src="./image/image-20250808151733261.png" alt="image-20250808151733261" style="zoom:50%;" />
+<img src="https://gitee.com/baofanting/image/raw/master/image/20250814091612877.png" alt="image-20250808151733261" style="zoom:50%;" />
 
 能够抓到包了,但是不知道怎么弄优惠券
 
@@ -84,7 +88,7 @@ connections--勾选Allow remote computers to connect  开启远程连接监控,�
 
 此时我点击抢优惠券,发出的请求是这个
 
-![image-20250808153445275](./image/image-20250808153445275.png)
+![image-20250808153445275](https://gitee.com/baofanting/image/raw/master/image/20250814091612878.png)
 
 右击save---Selected sessions --save as text   把整个数据包导出
 
@@ -99,7 +103,7 @@ connections--勾选Allow remote computers to connect  开启远程连接监控,�
 
 下载`jadx`放入app逆向,根据之前进入抢票界面会404,推测app是直接拉了一个网页来展示,并且在里边搜索OL41,dec_key 都没有找到,但是搜索`loadUrl`能够查询到一堆,也更加肯定了我的推测
 
-<img src="./image/image-20250808173742878.png" alt="image-20250808173742878" style="zoom:50%;" />
+<img src="https://gitee.com/baofanting/image/raw/master/image/20250814091612879.png" alt="image-20250808173742878" style="zoom:50%;" />
 
 #### 5.1 先找到入口 Activity
 
@@ -107,17 +111,17 @@ connections--勾选Allow remote computers to connect  开启远程连接监控,�
 
 在模拟器里点进**抢券页面**，同时打开`cmd`输入`adb shell dumpsys activity activities | findstr mResumedActivity`,用 **adb** 看当前界面所属的 Activity：
 
-![image-20250811111736249](./image/image-20250811111736249.png)
+![image-20250811111736249](https://gitee.com/baofanting/image/raw/master/image/20250814091612880.png)
 
 可以看到`com.zjte.hanggongefamily/.home.acitvity.CommonWebActivity t4`,`com.zjte.hanggongefamily` 是包名,`.home.acitvity.CommonWebActivity t4` 是类名,我们就需要这个类名,这说明抢券页面确实是用 **WebView 打开网页** 的，不是原生界面。
 
 打开`jadx`,进入这个路径`com.zjte.hanggongefamily/home/acitvity/CommonWebActivity`,但是这个类确实只是一个 **通用 WebView 容器**,它用 `getIntent().getStringExtra("url")` 拿到一个 URL,然后直接 `webView.loadUrl(url)`,没有任何和 `OL41`、`sign`、`dec_key` 相关的加密逻辑,所以抢券的请求一定是 **网页里的 JavaScript 发出去的**，而不是这个 Java 类本地构造的
 
-![image-20250811114548709](./image/image-20250811114548709.png)
+![image-20250811114548709](https://gitee.com/baofanting/image/raw/master/image/20250814091612881.png)
 
 我们需要找到`new Intent(, CommonWebActivity.class)`,是谁启动了`CommonWebActivity`并传入了url,但是搜索出来有好多
 
-![image-20250811114849742](./image/image-20250811114849742.png)
+![image-20250811114849742](https://gitee.com/baofanting/image/raw/master/image/20250814091612882.png)
 
 
 
@@ -125,15 +129,15 @@ connections--勾选Allow remote computers to connect  开启远程连接监控,�
 
 点击进入抢4元优惠券的界面和加载了这几个js,尝试获取他们产看,在fiddler右键 → Save → Response → Response Body,下载js文件
 
-![image-20250811131546059](./image/image-20250811131546059.png)
+![image-20250811131546059](https://gitee.com/baofanting/image/raw/master/image/20250814091612883.png)
 
 打开发现是乱码的,点击fiddler,点击这里编码后,能够在软件里查看,再次导出js,能够查看到数据
 
-![image-20250811133013639](./image/image-20250811133013639.png)
+![image-20250811133013639](https://gitee.com/baofanting/image/raw/master/image/20250814091612884.png)
 
-![image-20250811133207642](./image/image-20250811133207642.png)
+![image-20250811133207642](https://gitee.com/baofanting/image/raw/master/image/20250814091612885.png)
 
-此时打开查找,搜索兑换,可以看到有了,我们应该是找到了正确的js文件,是`chunk-337319a5.alalb541.js`![image-20250811133732176](./image/image-20250811133732176.png)
+此时打开查找,搜索兑换,可以看到有了,我们应该是找到了正确的js文件,是`chunk-337319a5.alalb541.js`![image-20250811133732176](https://gitee.com/baofanting/image/raw/master/image/20250814091612886.png)
 
 ai分析一波
 
@@ -181,11 +185,11 @@ ai分析一波
 
 重点是找到这个`b775`,加载抢券界面的时候没有这个b775,那只能在开启程序的时候有了吧,我们在前边搜索,一直成功找到两个个文件包含`b775`.
 
-![image-20250811135619722](./image/image-20250811135619722.png)
+![image-20250811135619722](https://gitee.com/baofanting/image/raw/master/image/20250814091612887.png)
 
 最终在`app-ea1f58e8.825614f8.js`这里找到了`b775`的函数定义,并且在函数里有相关的加密信息
 
-![image-20250811140759076](./image/image-20250811140759076.png)
+![image-20250811140759076](https://gitee.com/baofanting/image/raw/master/image/20250814091612888.png)
 
 #### 1. 加密相关工具（`A` 对象）
 
@@ -374,25 +378,25 @@ if __name__ == "__main__":
 
 打开雷电模拟器设置--其他设置--开启root权限,下载`mt管理器`打开路径`/data/data/com.zjte.hanggongefamily/app_webview/Default/Local Storage/leveldb/`能够看到有个log文件,他就是我们需要的
 
-![image-20250813092124912](./image/image-20250813092124912.png)
+![image-20250813092124912](https://gitee.com/baofanting/image/raw/master/image/20250814091612889.png)
 
 打开搜索`login_name`发现确实存在,但感觉像是加密过的,也不算明文,同时也能看到有很多的`ses_id`对应不同的对话,我清楚数据重新登录了一遍,这个`login_name`没有改变,基本可以确定这就是了
 
-![image-20250813093112715](./image/image-20250813093112715.png)
+![image-20250813093112715](https://gitee.com/baofanting/image/raw/master/image/20250814091612890.png)
 
 把这个放入程序,得到的请求结果的login_name长度与抓包的得到的长度类似
 
-![image-20250813094250321](./image/image-20250813094250321.png)
+![image-20250813094250321](https://gitee.com/baofanting/image/raw/master/image/20250814091612891.png)
 
 把db文件打开,也能发现,这个就是
 
-![image-20250813141225770](./image/image-20250813141225770.png)
+![image-20250813141225770](https://gitee.com/baofanting/image/raw/master/image/20250814091612892.png)
 
 ## 5.5 运行程序
 
 成功运行了,而且可以看到收到的回复和之前,直接拿点击按钮抓包发送的请求的回应差不多,就等到点测试了
 
-![image-20250811174856064](./image/image-20250811174856064.png)
+![image-20250811174856064](https://gitee.com/baofanting/image/raw/master/image/20250814091612893.png)
 
 
 
@@ -466,9 +470,9 @@ print(decrypt_data2(data2_str))
 
 可以看到运行后,他成功打印了消息,
 
-![image-20250813155139721](./image/image-20250813155139721.png)
+![image-20250813155139721](https://gitee.com/baofanting/image/raw/master/image/20250814091612894.png)
 
 我们再次运行之前的程序,他的回应是数字签名错误,因此只要显示的是优惠券被抢光了,就说明我们的代码正确了
 
-![image-20250813160803490](./image/image-20250813160803490.png)
+![image-20250813160803490](https://gitee.com/baofanting/image/raw/master/image/20250814091612895.png)
 
