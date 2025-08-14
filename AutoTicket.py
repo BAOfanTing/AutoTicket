@@ -17,6 +17,18 @@ from Crypto.Util.Padding import pad, unpad
 
 # ================= 配置区域 =================
 
+# =========================参数配置======= = ==========================
+CHANNEL = "02"
+APP_VER_NO = "3.1.4"
+SES_ID = "9ff35eb927a14410b971ac1e2c2e4f2d" # 替换成您的
+LOGIN_NAME_PLAINTEXT = "HFbSkQ7f/BeguGThXNyVwQ=="
+USER_ID_PLAINTEXT = "HFbSkQ7f/BeguGThXNyVwQ=="
+EXCHANGE_ID_PLAINTEXT = "10"   #9是2块,10是4块,11是6块
+RUN_TIME = "07:00"             # 运行时间 格式：HH:mm
+RUN_COUNT = 10                 # 运行次数
+
+# ======================================= = ==========================
+
 # 【密钥1】用于加密3DES密钥的【公钥】
 ENCRYPTION_PUBLIC_KEY_PEM = """-----BEGIN PUBLIC KEY-----
 MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC7yWoQaojBBqKI2H0j4e8ZeX/n1yip6hxrxSVth5F5n1JJ/B3liPMdz6K1chNLFTAcbI7hTL9KkphP9yQ+bPYD68Ajrt/DFrW679Zi1CoeetHVrM4sF68lYarGXwnSlKloaPWnI4Ch9cSqIvIOInlpeJqYPlJ8ZJvGCmbQoM6bewIDAQAB
@@ -52,17 +64,7 @@ NO_SIGN_KEYS = [
 
 URL = "https://app.hzgh.org.cn/unionApp/interf/front/OL/OL41"
 
-# ！！！请务必将下面四项替换成您的真实值！！！
-CHANNEL = "02"
-APP_VER_NO = "3.1.4"
-SES_ID = "9ff35eb927a14410b971ac1e2c2e4f2d" # 替换成您的
-
-LOGIN_NAME_PLAINTEXT = "HFbSkQ7f/BeguGThXNyVwQ=="
-USER_ID_PLAINTEXT = "HFbSkQ7f/BeguGThXNyVwQ=="
-EXCHANGE_ID_PLAINTEXT = "10"
-
-
-# =================================================================
+# ======================================= = ==========================
 
 def rand_str(n):
     return ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(n))
@@ -189,7 +191,8 @@ def decrypt_data2(data2):
     decrypted = pkcs7_unpad(decrypted)
     return decrypted.decode()
 
-def main():
+def run_exchange():
+    """执行一次兑换操作"""
     headers = {
         "Host": "app.hzgh.org.cn",
         "Connection": "keep-alive",
@@ -225,6 +228,26 @@ def main():
             print("返回中没有 data2 字段")
     except Exception as e:
         print("解密失败:", e)
+
+count = 0
+def job():
+    """定时任务执行的函数"""
+    global count
+    for i in range(RUN_COUNT):
+        print(f"第{i + 1}次执行兑换任务")
+        run_exchange()
+        count += 1
+
+def main():
+    """主函数，设置定时任务并运行"""
+    # 设置每天7:00执行任务
+    schedule.every().day.at(RUN_TIME).do(job)
+    print(f"程序已启动，将在每天{RUN_TIME}执行兑换任务，共执行{RUN_COUNT}次。")
+
+    # 保持程序运行
+    while True:
+        schedule.run_pending()
+        time.sleep(0.2)
 
 if __name__ == "__main__":
     main()
