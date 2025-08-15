@@ -3,12 +3,9 @@ import time
 import random
 import string
 import base64
-import hashlib
-import schedule # 如果您需要定时任务，请保留
+import time
+from datetime import datetime
 
-# 确保您已经正确安装了pycryptodome
-# pip uninstall crypto pycrypto
-# pip install pycryptodome
 from Crypto.PublicKey import RSA
 from Crypto.Signature import pkcs1_15
 from Cryptodome.Hash import SHA256
@@ -20,11 +17,11 @@ from Crypto.Util.Padding import pad, unpad
 # =========================参数配置======= = ==========================
 CHANNEL = "02"
 APP_VER_NO = "3.1.4"
-SES_ID = "9ff35eb927a14410b971ac1e2c2e4f2d" # 替换成您的
+SES_ID = "44f451f1dad24fc18f7ebfa076128314" # 重新登录后会变
 LOGIN_NAME_PLAINTEXT = "HFbSkQ7f/BeguGThXNyVwQ=="
 USER_ID_PLAINTEXT = "HFbSkQ7f/BeguGThXNyVwQ=="
 EXCHANGE_ID_PLAINTEXT = "10"   #9是2块,10是4块,11是6块
-RUN_TIME = "07:00"             # 运行时间 格式：HH:mm
+RUN_TIME = datetime(2025, 8, 15, 10, 20, 59, 000000)  # 2025-08-16 06:59:59.900
 RUN_COUNT = 10                 # 运行次数
 
 # ======================================= = ==========================
@@ -234,20 +231,27 @@ def job():
     """定时任务执行的函数"""
     global count
     for i in range(RUN_COUNT):
-        print(f"第{i + 1}次执行兑换任务")
+        print(f"第{i + 1}次执行兑换任务，当前时间：{datetime.now()}")
         run_exchange()
         count += 1
+
+def wait_until_target():
+    while True:
+        now = datetime.now()
+        if now >= RUN_TIME:
+            break
+        # 控制检查频率到毫秒
+        time.sleep(0.0005)  # 0.5 毫秒检查一次
 
 def main():
     """主函数，设置定时任务并运行"""
     # 设置每天7:00执行任务
-    schedule.every().day.at(RUN_TIME).do(job)
+    
     print(f"程序已启动，将在每天{RUN_TIME}执行兑换任务，共执行{RUN_COUNT}次。")
-
+    wait_until_target()
     # 保持程序运行
-    while True:
-        schedule.run_pending()
-        time.sleep(0.2)
+    job()
+
 
 if __name__ == "__main__":
     main()
