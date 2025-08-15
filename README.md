@@ -34,7 +34,7 @@
 
 # 运行流程
 
-打开fiddler--配置好fiddler--打开雷电模拟器--登录杭工e家--进入抢券界面--启动程序  能够得到200的状态码说明步骤对了
+配置好fiddler与模拟器(模拟器打不打开都行)---打开fiddler----启动程序  能够得到200的状态码说明步骤对了
 
 
 
@@ -501,3 +501,21 @@ print(decrypt_data2(data2_str))
 <img src="https://gitee.com/baofanting/image/raw/master/image/20250815090042044.png" alt="image-20250815085626063"  />
 
 <img src="https://gitee.com/baofanting/image/raw/master/image/20250815090013077.png" alt="image-20250815090000631"  />
+
+# 8 优化
+
+时间精确到毫秒级,使用线程同时发送请求
+
+```python
+def job():
+    threads = []
+    for i in range(RUN_COUNT):
+        print(f"准备启动第{i+1}个线程，时间：{datetime.now()}")
+        t = threading.Thread(target=run_exchange, name=f"Thread-{i+1}")
+        t.start()
+        threads.append(t)
+```
+
+
+
+![image-20250815103054139](https://gitee.com/baofanting/image/raw/master/image/20250815103228415.png)

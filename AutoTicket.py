@@ -5,7 +5,7 @@ import string
 import base64
 import time
 from datetime import datetime
-
+import threading
 from Crypto.PublicKey import RSA
 from Crypto.Signature import pkcs1_15
 from Cryptodome.Hash import SHA256
@@ -21,7 +21,7 @@ SES_ID = "44f451f1dad24fc18f7ebfa076128314" # 重新登录后会变
 LOGIN_NAME_PLAINTEXT = "HFbSkQ7f/BeguGThXNyVwQ=="
 USER_ID_PLAINTEXT = "HFbSkQ7f/BeguGThXNyVwQ=="
 EXCHANGE_ID_PLAINTEXT = "10"   #9是2块,10是4块,11是6块
-RUN_TIME = datetime(2025, 8, 15, 10, 20, 59, 000000)  # 2025-08-16 06:59:59.900
+RUN_TIME = datetime(2025, 8, 15, 10, 29, 59, 000000)  # 2025-08-16 06:59:59.900
 RUN_COUNT = 10                 # 运行次数
 
 # ======================================= = ==========================
@@ -226,14 +226,13 @@ def run_exchange():
     except Exception as e:
         print("解密失败:", e)
 
-count = 0
 def job():
-    """定时任务执行的函数"""
-    global count
+    threads = []
     for i in range(RUN_COUNT):
-        print(f"第{i + 1}次执行兑换任务，当前时间：{datetime.now()}")
-        run_exchange()
-        count += 1
+        print(f"准备启动第{i+1}个线程，时间：{datetime.now()}")
+        t = threading.Thread(target=run_exchange, name=f"Thread-{i+1}")
+        t.start()
+        threads.append(t)
 
 def wait_until_target():
     while True:
