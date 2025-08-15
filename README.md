@@ -24,7 +24,7 @@
 
 `PUBLIC_KEY_PEM` 公钥,抓包获取,应该大家都一样
 
-`SES_ID` =  抓包得到的id,也可模拟器本地文件查看获取
+`SES_ID` =  抓包得到的id,也可模拟器本地文件查看获取,重新登录后ses_id会变化
 
 `LOGIN_NAME_PLAINTEXT`=模拟器本地文件查看获取
 
