@@ -498,6 +498,6 @@ print(decrypt_data2(data2_str))
 
 8.15 早上七点,终于抢到一张,定时10次,大家都这么强,我这科技都才只抢到一张
 
-<img src="https://gitee.com/baofanting/image/raw/master/image/20250815090042044.png" alt="image-20250815085626063" style="zoom:50%;" />
+<img src="https://gitee.com/baofanting/image/raw/master/image/20250815090042044.png" alt="image-20250815085626063"  />
 
-<img src="https://gitee.com/baofanting/image/raw/master/image/20250815090013077.png" alt="image-20250815090000631" style="zoom:50%;" />
+<img src="https://gitee.com/baofanting/image/raw/master/image/20250815090013077.png" alt="image-20250815090000631"  />
