@@ -11,22 +11,26 @@ from Crypto.Signature import pkcs1_15
 from Cryptodome.Hash import SHA256
 from Crypto.Cipher import DES3, PKCS1_v1_5
 from Crypto.Util.Padding import pad, unpad
+import urllib3
+#清楚警告
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # ================= 配置区域 =================
 
 # =========================参数配置======= = ==========================
 CHANNEL = "02"
 APP_VER_NO = "3.1.4"
-SES_ID = "44f451f1dad24fc18f7ebfa076128314" # 重新登录后会变
+SES_ID = "a2fa806b93594c86a947e8e0e43c582d" # 重新登录后会变
 LOGIN_NAME_PLAINTEXT = "HFbSkQ7f/BeguGThXNyVwQ=="
 USER_ID_PLAINTEXT = "HFbSkQ7f/BeguGThXNyVwQ=="
 EXCHANGE_ID_PLAINTEXT = "10"   #9是2块,10是4块,11是6块
-RUN_TIME = datetime(2025, 8, 15, 10, 29, 59, 000000)  # 2025-08-16 06:59:59.900
-RUN_COUNT = 10                 # 运行次数
+RUN_TIME = datetime(2025, 8, 15, 16, 59, 59, 500000)  # 2025-08-16 06:59:59.900
+RUN_COUNT = 30                # 运行次数
 
 # ======================================= = ==========================
 
-# 【密钥1】用于加密3DES密钥的【公钥】
+# 【密钥1】用于加密
+# 3DES密钥的【公钥】
 ENCRYPTION_PUBLIC_KEY_PEM = """-----BEGIN PUBLIC KEY-----
 MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC7yWoQaojBBqKI2H0j4e8ZeX/n1yip6hxrxSVth5F5n1JJ/B3liPMdz6K1chNLFTAcbI7hTL9KkphP9yQ+bPYD68Ajrt/DFrW679Zi1CoeetHVrM4sF68lYarGXwnSlKloaPWnI4Ch9cSqIvIOInlpeJqYPlJ8ZJvGCmbQoM6bewIDAQAB
 -----END PUBLIC KEY-----"""
@@ -214,13 +218,13 @@ def run_exchange():
     # print("sign 长度:", len(payload.get("sign","")))
 
     resp = requests.post(URL, headers=headers, json=payload, verify=False, proxies=proxies)
-    print("状态码:", resp.status_code)
+    # print("状态码:", resp.status_code)
     # print("响应:", resp.text)
     try:
         resp_json = resp.json()
         if "data2" in resp_json:
             decrypted_json = decrypt_data2(resp_json["data2"])
-            print("解密响应:", decrypted_json)
+            print(decrypted_json)
         else:
             print("返回中没有 data2 字段")
     except Exception as e:
@@ -250,7 +254,8 @@ def main():
     wait_until_target()
     # 保持程序运行
     job()
-
+    time.sleep(0.2)  #单位是s
+    job()
 
 if __name__ == "__main__":
     main()
