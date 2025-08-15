@@ -10,6 +10,8 @@
 
 # 更新记录
 
+8.15 早上7点,抢着一张4快的优惠券
+
 8.14 解决数字签名错误问题,回应变为,积分兑换-活动购买失败. 响应成功变为 手慢,优惠券被抢光
 
 8.13 能够解密回应消息,更好排查,发现sign构建的比官方的短很多,问题应该在这
@@ -493,3 +495,9 @@ print(decrypt_data2(data2_str))
 这网还是很卡,5点准时抢显示火爆,我发现我的积分少了5个,但是没有票绝了,然后浏览了一个新闻积分又加回来了
 
 ![image-20250814170416147](https://gitee.com/baofanting/image/raw/master/image/20250814171002794.png)
+
+8.15 早上七点,终于抢到一张,定时10次,大家都这么强,我这科技都才只抢到一张
+
+<img src="https://gitee.com/baofanting/image/raw/master/image/20250815090042044.png" alt="image-20250815085626063" style="zoom:50%;" />
+
+<img src="https://gitee.com/baofanting/image/raw/master/image/20250815090013077.png" alt="image-20250815090000631" style="zoom:50%;" />
