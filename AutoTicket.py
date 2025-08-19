@@ -20,12 +20,12 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # =========================参数配置======= = ==========================
 CHANNEL = "02"
 APP_VER_NO = "3.1.4"
-SES_ID = "a2fa806b93594c86a947e8e0e43c582d" # 重新登录后会变
+SES_ID = "bc18314fa23243caba29427098662d08" # 重新登录后会变
 LOGIN_NAME_PLAINTEXT = "HFbSkQ7f/BeguGThXNyVwQ=="
 USER_ID_PLAINTEXT = "HFbSkQ7f/BeguGThXNyVwQ=="
 EXCHANGE_ID_PLAINTEXT = "10"   #9是2块,10是4块,11是6块
-RUN_TIME = datetime(2025, 8, 15, 16, 59, 59, 500000)  # 2025-08-16 06:59:59.900
-RUN_COUNT = 30                # 运行次数
+RUN_TIME = datetime(2025, 8, 19, 17, 00, 1, 500000)  # 2025-08-16 06:59:59.900
+RUN_COUNT = 50                # 运行次数
 
 # ======================================= = ==========================
 
@@ -244,7 +244,7 @@ def wait_until_target():
         if now >= RUN_TIME:
             break
         # 控制检查频率到毫秒
-        time.sleep(0.0005)  # 0.5 毫秒检查一次
+        time.sleep(0.05)  # 0.5 毫秒检查一次
 
 def main():
     """主函数，设置定时任务并运行"""
