@@ -207,17 +207,17 @@ def run_exchange():
         "Accept-Language": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7"
     }
 
-    proxies = {
-        "http": "http://127.0.0.1:8888",
-        "https": "http://127.0.0.1:8888"
-    }
+    # proxies = {
+    #     "http": "http://127.0.0.1:8888",
+    #     "https": "http://127.0.0.1:8888"
+    # }
 
     payload = build_payload()
     # print("请求数据:", payload)
     # # 自检：签名长度应为 172
     # print("sign 长度:", len(payload.get("sign","")))
 
-    resp = requests.post(URL, headers=headers, json=payload, verify=False, proxies=proxies)
+    resp = requests.post(URL, headers=headers, json=payload, verify=False,timeout=5)
     # print("状态码:", resp.status_code)
     # print("响应:", resp.text)
     try:
