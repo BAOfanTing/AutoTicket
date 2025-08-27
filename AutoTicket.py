@@ -12,6 +12,7 @@ from Cryptodome.Hash import SHA256
 from Crypto.Cipher import DES3, PKCS1_v1_5
 from Crypto.Util.Padding import pad, unpad
 import urllib3
+import concurrent.futures
 #清楚警告
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -20,11 +21,11 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # =========================参数配置======= = ==========================
 CHANNEL = "02"
 APP_VER_NO = "3.1.4"
-SES_ID = "95616c4807af45c4a5205b33a3d64acb" # 重新登录后会变
+SES_ID = "26f1346777824420b1eb4ac594227a03" # 重新登录后会变
 LOGIN_NAME_PLAINTEXT = "HFbSkQ7f/BeguGThXNyVwQ=="
 USER_ID_PLAINTEXT = "HFbSkQ7f/BeguGThXNyVwQ=="
 EXCHANGE_ID_PLAINTEXT = "10"   #9是2块,10是4块,11是6块
-RUN_TIME = datetime(2025, 8, 25, 17, 00, 1, 500000)  # 2025-08-16 06:59:59.900
+RUN_TIME = datetime(2025, 8, 27, 11, 30, 1, 500000)  # 2025-08-16 06:59:59.900
 RUN_COUNT = 50                # 运行次数
 
 # ======================================= = ==========================
@@ -192,9 +193,10 @@ def decrypt_data2(data2):
     decrypted = pkcs7_unpad(decrypted)
     return decrypted.decode()
 
-def run_exchange():
-    """执行一次兑换操作"""
-    headers = {
+#创建全局session对象,减少tcp链接断开的消耗
+session = requests.Session()
+#设置请求头
+headers = {
         "Host": "app.hzgh.org.cn",
         "Connection": "keep-alive",
         "Accept": "application/json, text/plain, */*",
@@ -206,20 +208,15 @@ def run_exchange():
         "Accept-Encoding": "gzip, deflate",
         "Accept-Language": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7"
     }
+session.headers.update(headers)
 
-    # proxies = {
-    #     "http": "http://127.0.0.1:8888",
-    #     "https": "http://127.0.0.1:8888"
-    # }
-
+def run_exchange():
+    """执行一次兑换操作"""
+    
     payload = build_payload()
-    # print("请求数据:", payload)
-    # # 自检：签名长度应为 172
-    # print("sign 长度:", len(payload.get("sign","")))
+     # 不需要每次都传入 headers，因为它们已经设置在 Session 中了
+    resp = session.post(URL, json=payload, verify=False)
 
-    resp = requests.post(URL, headers=headers, json=payload, verify=False,timeout=5)
-    # print("状态码:", resp.status_code)
-    # print("响应:", resp.text)
     try:
         resp_json = resp.json()
         if "data2" in resp_json:
@@ -231,12 +228,11 @@ def run_exchange():
         print("解密失败:", e)
 
 def job():
-    threads = []
-    for i in range(RUN_COUNT):
-        print(f"准备启动第{i+1}个线程，时间：{datetime.now()}")
-        t = threading.Thread(target=run_exchange, name=f"Thread-{i+1}")
-        t.start()
-        threads.append(t)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=RUN_COUNT) as executor:
+        for i in range(RUN_COUNT):
+            print(f"准备启动第{i+1}个线程，时间：{datetime.now()}")
+            executor.submit(run_exchange)
+            # time.sleep(0.05)
 
 def wait_until_target():
     while True:
@@ -244,7 +240,7 @@ def wait_until_target():
         if now >= RUN_TIME:
             break
         # 控制检查频率到毫秒
-        time.sleep(0.05)  # 0.5 毫秒检查一次
+        # time.sleep(0.05)  # 0.5 毫秒检查一次
 
 def main():
     """主函数，设置定时任务并运行"""
