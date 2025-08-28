@@ -11,6 +11,7 @@
 代码仓库:https://github.com/BAOfanTing/AutoTicket
 
 # 更新记录
+8.28 看了下抢到票的时间基本都是05秒,打算修改试试
 
 8.16,8.17,8.18,8.19都能抢到,不太稳定
 
@@ -23,6 +24,13 @@
 8.12中午11.30测试失败,感觉还是得抓个抢成功的包看看(mmd,手抢都抢不到)
 
 8.8 开始学习
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=BAOfanTing/AutoTicket&type=Date)](https://www.star-history.com/#BAOfanTing/AutoTicket&Date)
+
+# TODO
+- [ ] 打包为一个安卓app,直接自动抓取信息🚀
 
 # 参数配置
 

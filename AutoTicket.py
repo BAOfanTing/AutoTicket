@@ -21,11 +21,11 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # =========================参数配置======= = ==========================
 CHANNEL = "02"
 APP_VER_NO = "3.1.4"
-SES_ID = "26f1346777824420b1eb4ac594227a03" # 重新登录后会变
+SES_ID = "9868eed39c9f4e4b99a11eeac4f3e313" # 重新登录后会变
 LOGIN_NAME_PLAINTEXT = "HFbSkQ7f/BeguGThXNyVwQ=="
 USER_ID_PLAINTEXT = "HFbSkQ7f/BeguGThXNyVwQ=="
 EXCHANGE_ID_PLAINTEXT = "10"   #9是2块,10是4块,11是6块
-RUN_TIME = datetime(2025, 8, 27, 11, 30, 1, 500000)  # 2025-08-16 06:59:59.900
+RUN_TIME = datetime(2025, 8, 28, 17, 00, 4, 500000)  # 2025-08-16 06:59:59.900
 RUN_COUNT = 50                # 运行次数
 
 # ======================================= = ==========================
@@ -215,7 +215,7 @@ def run_exchange():
     
     payload = build_payload()
      # 不需要每次都传入 headers，因为它们已经设置在 Session 中了
-    resp = session.post(URL, json=payload, verify=False)
+    resp = session.post(URL, json=payload, verify=False,timeout=1)
 
     try:
         resp_json = resp.json()
@@ -228,7 +228,7 @@ def run_exchange():
         print("解密失败:", e)
 
 def job():
-    with concurrent.futures.ThreadPoolExecutor(max_workers=RUN_COUNT) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=12) as executor:
         for i in range(RUN_COUNT):
             print(f"准备启动第{i+1}个线程，时间：{datetime.now()}")
             executor.submit(run_exchange)
