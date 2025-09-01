@@ -21,11 +21,11 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # =========================参数配置======= = ==========================
 CHANNEL = "02"
 APP_VER_NO = "3.1.4"
-SES_ID = "9868eed39c9f4e4b99a11eeac4f3e313" # 重新登录后会变
+SES_ID = "ceaa1475cc924269b2e9f9d7cdd0d2f5" # 重新登录后会变
 LOGIN_NAME_PLAINTEXT = "HFbSkQ7f/BeguGThXNyVwQ=="
 USER_ID_PLAINTEXT = "HFbSkQ7f/BeguGThXNyVwQ=="
 EXCHANGE_ID_PLAINTEXT = "10"   #9是2块,10是4块,11是6块
-RUN_TIME = datetime(2025, 8, 28, 17, 00, 4, 500000)  # 2025-08-16 06:59:59.900
+RUN_TIME = datetime(2025, 9, 1, 17, 00, 0, 500000)  # 2025-08-16 06:59:59.900
 RUN_COUNT = 50                # 运行次数
 
 # ======================================= = ==========================
@@ -215,7 +215,7 @@ def run_exchange():
     
     payload = build_payload()
      # 不需要每次都传入 headers，因为它们已经设置在 Session 中了
-    resp = session.post(URL, json=payload, verify=False,timeout=1)
+    resp = session.post(URL, json=payload, verify=False)
 
     try:
         resp_json = resp.json()
@@ -232,7 +232,7 @@ def job():
         for i in range(RUN_COUNT):
             print(f"准备启动第{i+1}个线程，时间：{datetime.now()}")
             executor.submit(run_exchange)
-            # time.sleep(0.05)
+            time.sleep(0.08)
 
 def wait_until_target():
     while True:
@@ -249,8 +249,6 @@ def main():
     print(f"程序已启动，将在每天{RUN_TIME}执行兑换任务，共执行{RUN_COUNT}次。")
     wait_until_target()
     # 保持程序运行
-    job()
-    time.sleep(0.2)  #单位是s
     job()
 
 if __name__ == "__main__":
