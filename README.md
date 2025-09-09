@@ -40,6 +40,9 @@
 
 你在手机登录杭工e家后,模拟器就会退出登录,需要重新登录,点击积分兑换界面,这样本地才能更新ses_id,此时再打开log获取
 
-**## Star History**
+****
 
-[![Star History Chart](./image/AutoTicket&type=Date.svg+xml)
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=BAOfanTing/AutoTicket&type=Date)](https://www.star-history.com/#BAOfanTing/AutoTicket&Date)
+
