@@ -251,6 +251,9 @@ def run_exchange():
 # 修改job函数中的print语句
 def job():
     with concurrent.futures.ThreadPoolExecutor(max_workers=12) as executor:
+        log_print(USER_ID_PLAINTEXT)
+        log_print(LOGIN_NAME_PLAINTEXT)
+        log_print(SES_ID)
         for i in range(RUN_COUNT):
             log_print(f"准备启动第{i+1}个线程，时间：{datetime.now()}")  # 替换原来的print
             executor.submit(run_exchange)

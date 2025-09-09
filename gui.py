@@ -32,7 +32,7 @@ class Worker(QThread):
             # 更新AutoTicket模块中的全局变量
             AutoTicket.LOGIN_NAME_PLAINTEXT = self.login_name
             AutoTicket.USER_ID_PLAINTEXT = self.login_name
-            AutoTicket.SES_ID_PLAINTEXT = self.ses_id
+            AutoTicket.SES_ID = self.ses_id
             AutoTicket.EXCHANGE_ID_PLAINTEXT = self.exchange_id
             
             # 解析运行时间字符串
