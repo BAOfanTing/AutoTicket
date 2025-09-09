@@ -21,13 +21,13 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # =========================参数配置======= = ==========================
 CHANNEL = "02"
 APP_VER_NO = "3.1.4"
-SES_ID = "ceaa1475cc924269b2e9f9d7cdd0d2f5" # 重新登录后会变
+SES_ID = "a54f9aa8e2974e85b19ab9b8009a5101" # 重新登录后会变
 LOGIN_NAME_PLAINTEXT = "HFbSkQ7f/BeguGThXNyVwQ=="
 USER_ID_PLAINTEXT = "HFbSkQ7f/BeguGThXNyVwQ=="
 EXCHANGE_ID_PLAINTEXT = "10"   #9是2块,10是4块,11是6块
-RUN_TIME = datetime(2025, 9, 1, 17, 00, 0, 500000)  # 2025-08-16 06:59:59.900
-RUN_COUNT = 50                # 运行次数
-
+RUN_TIME = datetime(2025, 9, 9, 17, 00, 0, 300000)  # 2025-08-16 06:59:59.900
+RUN_COUNT = 100   # 运行次数
+timeSleep = 0.08  # 请求间隔   0.05 = 0.05秒发送一次
 # ======================================= = ==========================
 
 # 【密钥1】用于加密
@@ -210,29 +210,58 @@ headers = {
     }
 session.headers.update(headers)
 
+# 在文件开头添加日志系统
+import sys
+import io
+from contextlib import redirect_stdout
+
+# 全局日志回调函数
+log_callback = None
+
+def set_log_callback(callback):
+    """设置日志回调函数"""
+    global log_callback
+    log_callback = callback
+
+def log_print(*args, **kwargs):
+    """自定义打印函数，将输出重定向到回调函数"""
+    if log_callback:
+        message = ' '.join(str(arg) for arg in args)
+        log_callback(message)
+    else:
+        print(*args, **kwargs)
+
+# 修改run_exchange函数中的print语句
 def run_exchange():
     """执行一次兑换操作"""
     
     payload = build_payload()
-     # 不需要每次都传入 headers，因为它们已经设置在 Session 中了
     resp = session.post(URL, json=payload, verify=False)
 
     try:
         resp_json = resp.json()
         if "data2" in resp_json:
             decrypted_json = decrypt_data2(resp_json["data2"])
-            print(decrypted_json)
+            log_print(decrypted_json)  # 替换原来的print
         else:
-            print("返回中没有 data2 字段")
+            log_print("返回中没有 data2 字段")  # 替换原来的print
     except Exception as e:
-        print("解密失败:", e)
+        log_print("解密失败:", e)  # 替换原来的print
 
+# 修改job函数中的print语句
 def job():
     with concurrent.futures.ThreadPoolExecutor(max_workers=12) as executor:
         for i in range(RUN_COUNT):
-            print(f"准备启动第{i+1}个线程，时间：{datetime.now()}")
+            log_print(f"准备启动第{i+1}个线程，时间：{datetime.now()}")  # 替换原来的print
             executor.submit(run_exchange)
-            time.sleep(0.08)
+            time.sleep(timeSleep)
+
+# 修改main函数中的print语句
+def main():
+    """主函数，设置定时任务并运行"""
+    log_print(f"程序已启动，将在每天{RUN_TIME}执行兑换任务，共执行{RUN_COUNT}次。")
+    wait_until_target()
+    job()
 
 def wait_until_target():
     while True:
@@ -241,15 +270,6 @@ def wait_until_target():
             break
         # 控制检查频率到毫秒
         # time.sleep(0.05)  # 0.5 毫秒检查一次
-
-def main():
-    """主函数，设置定时任务并运行"""
-    # 设置每天7:00执行任务
-    
-    print(f"程序已启动，将在每天{RUN_TIME}执行兑换任务，共执行{RUN_COUNT}次。")
-    wait_until_target()
-    # 保持程序运行
-    job()
 
 if __name__ == "__main__":
     main()
