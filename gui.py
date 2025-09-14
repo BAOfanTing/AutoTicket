@@ -6,6 +6,8 @@ from PyQt5.QtCore import QThread, pyqtSignal, QDateTime, QTimer
 import AutoTicket
 import time
 import threading
+import json
+import os
 
 class Worker(QThread):
     log_signal = pyqtSignal(str)
@@ -78,9 +80,11 @@ class MainWindow(QWidget):
         super().__init__()
         self.worker = None
         self.init_ui()
+        self.config_file = "./config.json"  # 配置文件路径
+        self.load_config()  # 加载配置文件
 
     def init_ui(self):
-        self.setWindowTitle('AutoTicket 抢票工具')
+        self.setWindowTitle('AutoTicket 1.0.3')
         self.setGeometry(100, 100, 600, 500)
 
         # 创建配置区域
@@ -90,7 +94,7 @@ class MainWindow(QWidget):
         self.login_name_edit = QLineEdit(AutoTicket.LOGIN_NAME_PLAINTEXT)
         self.ses_id_edit = QLineEdit(AutoTicket.SES_ID)
         self.exchange_id_edit = QLineEdit(AutoTicket.EXCHANGE_ID_PLAINTEXT)
-        self.run_time_edit = QLineEdit("2025-09-09 17:00:00")
+        self.run_time_edit = QLineEdit(QDateTime.currentDateTime().toString("yyyy-MM-dd hh:mm:ss"))
         self.run_count_edit = QLineEdit(str(AutoTicket.RUN_COUNT))
         self.time_sleep_edit = QLineEdit(str(AutoTicket.timeSleep))
         
@@ -126,6 +130,10 @@ class MainWindow(QWidget):
         # 连接信号和槽
         self.start_button.clicked.connect(self.start_program)
         self.stop_button.clicked.connect(self.stop_program)
+
+        #输入后保存ses_id和login_name
+        self.login_name_edit.textChanged.connect(self.save_config)
+        self.ses_id_edit.textChanged.connect(self.save_config)
 
     def start_program(self):
         login_name = self.login_name_edit.text()
@@ -174,6 +182,27 @@ class MainWindow(QWidget):
         self.start_button.setEnabled(True)
         self.stop_button.setEnabled(False)
         self.update_log("程序执行完成")
+
+    def save_config(self):
+        #保存配置文件
+        config = {
+            "login_name":self.login_name_edit.text(),
+            "ses_id":self.ses_id_edit.text()
+        }
+        with open(self.config_file, 'w') as f:
+            json.dump(config, f, indent=4)
+    
+    def load_config(self):
+        "从文件中加载"
+        if os.path.exists(self.config_file):
+            with open(self.config_file,encoding='utf-8') as f:
+                config = json.load(f)
+                # 更新界面中的值
+                if "login_name" in config:
+                    self.login_name_edit.setText(config["login_name"])
+                if "ses_id" in config:
+                    self.ses_id_edit.setText(config["ses_id"])
+
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
