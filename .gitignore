@@ -1,5 +1,6 @@
-__pycache__/AutoTicket.cpython-37.pyc
+__pycache__/*
 dist
 build
 gui.spec
 config.json
+AutoTicket.exe.spec

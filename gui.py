@@ -9,7 +9,7 @@ import threading
 import json
 import os
 import updater
-
+# pyinstaller --onefile --windowed -n AutoTicket.exe gui.py
 class Worker(QThread):
     log_signal = pyqtSignal(str)
     finished_signal = pyqtSignal()
