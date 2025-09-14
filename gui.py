@@ -8,6 +8,7 @@ import time
 import threading
 import json
 import os
+import updater
 
 class Worker(QThread):
     log_signal = pyqtSignal(str)
@@ -83,8 +84,11 @@ class MainWindow(QWidget):
         self.config_file = "./config.json"  # 配置文件路径
         self.load_config()  # 加载配置文件
 
+        # 检查更新
+        self.check_update()
+
     def init_ui(self):
-        self.setWindowTitle('AutoTicket 1.0.3')
+        self.setWindowTitle(f'AutoTicket {updater.CURRENT_VERSION} --by bft')
         self.setGeometry(100, 100, 600, 500)
 
         # 创建配置区域
@@ -202,6 +206,36 @@ class MainWindow(QWidget):
                     self.login_name_edit.setText(config["login_name"])
                 if "ses_id" in config:
                     self.ses_id_edit.setText(config["ses_id"])
+
+    def check_update(self):
+        """
+        检查更新
+        :return: None
+        """
+        server_url = "https://gitee.com/baofanting/auto-ticket/raw/master/AutoTicket_update_info.json"
+        def update_callback(has_update, latest_version, download_url, message):
+            if has_update:
+                self.update_log(f"发现新版本 {latest_version}")
+                # 显示更新提示对话框
+                reply = QMessageBox.information(
+                    self, 
+                    "发现新版本", 
+                    f"发现新版本 {latest_version}\n\n是否前往下载？",
+                    QMessageBox.Yes | QMessageBox.No
+                )
+                if reply == QMessageBox.Yes:
+                    # 这里可以打开浏览器下载新版本
+                    import webbrowser
+                    webbrowser.open(download_url)
+            else:
+                self.update_log("当前已是最新版本")
+        
+        
+        self.update_log("正在检查更新...")
+        # 创建更新检查线程
+        self.updater = updater.UpdateChecker(server_url)
+        self.updater.sig_update.connect(update_callback)
+        self.updater.start()
 
 
 if __name__ == '__main__':
