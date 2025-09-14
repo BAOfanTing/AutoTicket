@@ -3,4 +3,4 @@ dist
 build
 gui.spec
 config.json
-AutoTicket.exe.spec
+AutoTicket.spec

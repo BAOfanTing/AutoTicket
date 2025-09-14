@@ -9,7 +9,7 @@ import threading
 import json
 import os
 import updater
-# pyinstaller --onefile --windowed -n AutoTicket.exe gui.py
+# pyinstaller --onefile --windowed --icon=./icon.ico -n AutoTicket gui.py
 class Worker(QThread):
     log_signal = pyqtSignal(str)
     finished_signal = pyqtSignal()
@@ -212,30 +212,35 @@ class MainWindow(QWidget):
         检查更新
         :return: None
         """
-        server_url = "https://gitee.com/baofanting/auto-ticket/raw/master/AutoTicket_update_info.json"
-        def update_callback(has_update, latest_version, download_url, message):
-            if has_update:
-                self.update_log(f"发现新版本 {latest_version}")
-                # 显示更新提示对话框
-                reply = QMessageBox.information(
-                    self, 
-                    "发现新版本", 
-                    f"发现新版本 {latest_version}\n\n是否前往下载？",
-                    QMessageBox.Yes | QMessageBox.No
-                )
-                if reply == QMessageBox.Yes:
-                    # 这里可以打开浏览器下载新版本
-                    import webbrowser
-                    webbrowser.open(download_url)
-            else:
-                self.update_log("当前已是最新版本")
-        
-        
-        self.update_log("正在检查更新...")
-        # 创建更新检查线程
-        self.updater = updater.UpdateChecker(server_url)
-        self.updater.sig_update.connect(update_callback)
-        self.updater.start()
+        try:
+            server_url = "https://gitee.com/baofanting/auto-ticket/raw/master/AutoTicket_update_info.json"
+            def update_callback(has_update, latest_version, download_url, message):
+                try:
+                    if has_update:
+                        self.update_log(f"发现新版本 {latest_version}")
+                        # 显示更新提示对话框
+                        reply = QMessageBox.information(
+                            self, 
+                            "发现新版本", 
+                            f"发现新版本 {latest_version}\n\n是否前往下载？",
+                            QMessageBox.Yes | QMessageBox.No
+                        )
+                        if reply == QMessageBox.Yes:
+                            # 这里可以打开浏览器下载新版本
+                            import webbrowser
+                            webbrowser.open(download_url)
+                    else:
+                        self.update_log("当前已是最新版本")
+                except Exception as e:
+                    self.update_log(f"处理更新结果时出错: {str(e)}")
+            
+            self.update_log("正在检查更新...")
+            # 创建更新检查线程
+            self.updater = updater.UpdateChecker(server_url)
+            self.updater.sig_update.connect(update_callback)
+            self.updater.start()
+        except Exception as e:
+            self.update_log(f"检查更新时出错: {str(e)}")
 
 
 if __name__ == '__main__':
