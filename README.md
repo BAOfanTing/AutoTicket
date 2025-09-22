@@ -36,6 +36,28 @@
 
 ![image-20250909152433677](https://gitee.com/baofanting/image/raw/master/image/20250909153108157.png)
 
+---
+
+在`JavaScript_Version`中添加了js版本，由于语言差异，js版本性能开销小，速度稍微快一点
+
+利用阿里云自动化运行，每天定时签到，定时兑换
+
+如果还是兑换失败，可以适当修改代码减少延迟时间
+
+![image-20250922130617149](https://rexin-shimin.oss-cn-hangzhou.aliyuncs.com/images/image-20250922130617149.png)
+
+- 签到推送
+
+![image-20250922130045697](https://rexin-shimin.oss-cn-hangzhou.aliyuncs.com/images/image-20250922130045697.png)
+
+- 留言推送
+
+![image-20250922130138257](https://rexin-shimin.oss-cn-hangzhou.aliyuncs.com/images/image-20250922130138257.png)
+
+- 兑换优惠券推送
+
+![image-20250922130347367](https://rexin-shimin.oss-cn-hangzhou.aliyuncs.com/images/image-20250922130347367.png)
+
 ## 注意事项
 
 你在手机登录杭工e家后,模拟器就会退出登录,需要重新登录,点击积分兑换界面,这样本地才能更新ses_id,此时再打开log获取
