@@ -6,7 +6,7 @@
 ```bash
 # 安装依赖
 npm install node-rsa
-
+npm install crypt
 ```
 
 ### 2. 配置钉钉机器人
@@ -38,11 +38,11 @@ node workflow_sigin.js
 ```
 **功能**: 3次签到 → 1次评论 → 1次查询积分
 
-#### 兑换优惠券
+#### 持续请求脚本
 ```bash
-node AutoTicket.js.js
+node AutoTicket.js
 ```
-**功能**: 智能重试兑换优惠券，直到成功
+**功能**: 持续请求直到出现"手慢了"响应，固定100ms延迟
 
 ## 📁 文件说明
 
@@ -51,10 +51,9 @@ node AutoTicket.js.js
 | `workflow_config.js` | 统一配置文件 | ✅ 需要配置用户信息 |
 | `dingtalk_config.js` | 钉钉通知配置 | ✅ 需要配置机器人信息 |
 | `workflow_sigin.js` | 主工作流脚本 | ❌ 直接运行 |
-| `AutoTicket.js.js` | 兑换优惠券脚本 | ❌ 直接运行 |
+| `AutoTicket.js` | 持续请求脚本 | ❌ 直接运行 |
 | `encrypt_rsa.js` | 加密模块 | ❌ 无需修改 |
 | `decrypt.js` | 解密模块 | ❌ 无需修改 |
-| `id_rsa_pkcs1.pem` | RSA私钥文件 | ❌ 已嵌入代码中 |
 
 ## ⚡ 常用命令
 
@@ -62,8 +61,8 @@ node AutoTicket.js.js
 # 运行完整工作流
 node workflow_sigin.js
 
-# 运行兑换优惠券 (带重试)
-node AutoTicket.js.js
+# 运行持续请求脚本
+node AutoTicket.js
 
 # 测试解密功能
 echo '{"data2":"加密数据"}' | node --security-revert=CVE-2023-46809 decrypt.js
@@ -96,7 +95,7 @@ echo '{"data2":"加密数据"}' | node --security-revert=CVE-2023-46809 decrypt.
 ## 🎯 使用建议
 
 1. **首次使用**: 先运行 `workflow_sigin.js` 测试基础功能
-2. **优惠券抢购**: 使用 `AutoTicket.js.js` 进行快速抢购
+2. **持续请求**: 使用 `AutoTicket.js` 进行持续请求直到出现"手慢了"
 3. **定时任务**: 可以设置定时任务自动执行
 4. **监控告警**: 关注钉钉通知，及时处理异常
 

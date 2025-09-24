@@ -26,6 +26,28 @@ function getStdin() {
     });
 }
 
+// 直接解密JSON响应对象（用于模块调用）
+function decryptResponse(responseData) {
+    try {
+        if (!responseData || !responseData.data2) {
+            throw new Error("响应中没有data2字段");
+        }
+
+        const finalDecryptedContent = decryptData2(responseData.data2);
+        
+        // 创建包含解密后data2的完整响应
+        const decryptedResponse = {
+            ...responseData,
+            data2: finalDecryptedContent
+        };
+        
+        return decryptedResponse;
+        
+    } catch (e) {
+        throw new Error(`解密过程中发生错误: ${e.message}`);
+    }
+}
+
 async function decryptData2FromStdin() {
     let responseData;
     try {
@@ -36,20 +58,10 @@ async function decryptData2FromStdin() {
         }
         
         responseData = JSON.parse(responseText);
-        const data2 = responseData.data2;
-
-        if (!data2) {
-            console.error("错误：响应中没有data2字段，解密终止。");
-            process.exit(1);
-        }
-
-        const finalDecryptedContent = decryptData2(data2);
-        
-        // 创建包含解密后data2的完整响应
-        responseData.data2 = finalDecryptedContent;
+        const decryptedResponse = decryptResponse(responseData);
         
         // 输出完整的JSON响应
-        console.log(JSON.stringify(responseData, null, 2)); // null, 2 用于格式化输出
+        console.log(JSON.stringify(decryptedResponse, null, 2)); // null, 2 用于格式化输出
         
     } catch (e) {
         console.error(`解密过程中发生错误: ${e.message}`);
@@ -82,7 +94,7 @@ function decryptData2(data2_full_base64) {
     const rsa_decrypted_buffer = crypto.privateDecrypt(
         {
             key: RSA_PRIVATE_KEY_PEM,
-            padding: crypto.constants.RSA_PKCS1_PADDING, // 对应 PKCS1_v1_5 填充
+            padding: crypto.constants.RSA_PKCS1_PADDING, // 明确指定 PKCS1 v1.5 填充
         },
         rsa_encrypted_buffer
     );
@@ -142,7 +154,8 @@ if (require.main === module) {
     decryptData2FromStdin();
 }
 
-// 可选：如果需要其他 JS 脚本导入这个功能
+// 导出解密函数供其他模块使用
 module.exports = {
-    decryptData2
+    decryptData2,
+    decryptResponse
 };

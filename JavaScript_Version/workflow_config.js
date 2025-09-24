@@ -3,6 +3,14 @@
  * 包含所有请求的公共字段和配置
  */
 
+// 获取用户ID（与login_name相同）
+function getUserId() {
+    return "此处填写加密后的用户名";
+}
+//  获取会话ID 
+function getSesId() {
+    return "此处填写会话ID";
+}
 module.exports = {
     // 基础配置
     baseUrl: 'https://app.hzgh.org.cn',
@@ -11,8 +19,8 @@ module.exports = {
     commonFields: {
         channel: "02",
         app_ver_no: "3.1.4",
-        login_name: "此处填写加密后的用户名",
-        ses_id: "此处填写会话ID"
+        login_name: getUserId(),
+        ses_id: getSesId()
     },
     
     // Cookie配置
@@ -64,14 +72,18 @@ module.exports = {
         
         // 兑换优惠券参数，默认兑换4块的优惠券，如需修改，请修改exchange_id字段，9是2块，10是4块，11是6块
         exchange: {
-            user_id: "此处填写加密后的用户ID",
+            user_id: getUserId(),
             exchange_id: "10"
         }
     },
     
     // 请求配置
     request: {
-        timeout: 8000,
+        timeout: 5000,
         retryDelay: 1000
-    }
+    },
+    
+    // 导出工具函数
+    getUserId: getUserId,
+    getSesId: getSesId
 };
