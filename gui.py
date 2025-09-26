@@ -98,7 +98,10 @@ class MainWindow(QWidget):
         self.login_name_edit = QLineEdit(AutoTicket.LOGIN_NAME_PLAINTEXT)
         self.ses_id_edit = QLineEdit(AutoTicket.SES_ID)
         self.exchange_id_edit = QLineEdit(AutoTicket.EXCHANGE_ID_PLAINTEXT)
-        self.run_time_edit = QLineEdit(QDateTime.currentDateTime().toString("yyyy-MM-dd hh:mm:ss"))
+        
+        # 设置默认时间，但允许用户手动修改
+        default_time = self.get_next_run_time()
+        self.run_time_edit = QLineEdit(default_time)
         self.run_count_edit = QLineEdit(str(AutoTicket.RUN_COUNT))
         self.time_sleep_edit = QLineEdit(str(AutoTicket.timeSleep))
         
@@ -138,6 +141,9 @@ class MainWindow(QWidget):
         #输入后保存ses_id和login_name
         self.login_name_edit.textChanged.connect(self.save_config)
         self.ses_id_edit.textChanged.connect(self.save_config)
+        self.exchange_id_edit.textChanged.connect(self.save_config)
+        self.run_count_edit.textChanged.connect(self.save_config)
+        self.time_sleep_edit.textChanged.connect(self.save_config)
 
     def start_program(self):
         login_name = self.login_name_edit.text()
@@ -191,7 +197,10 @@ class MainWindow(QWidget):
         #保存配置文件
         config = {
             "login_name":self.login_name_edit.text(),
-            "ses_id":self.ses_id_edit.text()
+            "ses_id":self.ses_id_edit.text(),
+            "exchange_id":self.exchange_id_edit.text(),
+            "run_count":self.run_count_edit.text(),
+            "time_sleep":self.time_sleep_edit.text(),
         }
         with open(self.config_file, 'w') as f:
             json.dump(config, f, indent=4)
@@ -206,6 +215,44 @@ class MainWindow(QWidget):
                     self.login_name_edit.setText(config["login_name"])
                 if "ses_id" in config:
                     self.ses_id_edit.setText(config["ses_id"])
+                if "exchange_id" in config:
+                    self.exchange_id_edit.setText(config["exchange_id"])
+                if "run_count" in config:
+                    self.run_count_edit.setText(config["run_count"])
+                if "time_sleep" in config:
+                    self.time_sleep_edit.setText(config["time_sleep"])
+
+    def get_next_run_time(self):
+        """
+        获取下一个运行时间点
+        规则：
+        1. 如果当前时间在7:00之前，选择当天的7:00
+        2. 如果当前时间在7:00到11:30之间，选择11:30
+        3. 如果当前时间在11:30到17:00之间，选择17:00
+        4. 如果当前时间超过17:00，选择第二天的7:00
+        """
+        from datetime import datetime, timedelta
+        
+        now = datetime.now()
+        today = now.date()
+        
+        # 定义时间点
+        time_07_00 = datetime.combine(today, datetime.strptime("07:00", "%H:%M").time())
+        time_11_30 = datetime.combine(today, datetime.strptime("11:30", "%H:%M").time())
+        time_17_00 = datetime.combine(today, datetime.strptime("17:00", "%H:%M").time())
+        time_07_00_tomorrow = datetime.combine(today + timedelta(days=1), datetime.strptime("07:00", "%H:%M").time())
+        
+        # 根据当前时间选择最近的时间点
+        if now < time_07_00:
+            next_time = time_07_00
+        elif now < time_11_30:
+            next_time = time_11_30
+        elif now < time_17_00:
+            next_time = time_17_00
+        else:
+            next_time = time_07_00_tomorrow
+            
+        return next_time.strftime("%Y-%m-%d %H:%M:%S")
 
     def check_update(self):
         """
