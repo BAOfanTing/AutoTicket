@@ -3,7 +3,7 @@
  * 工作流版本：3次签到 → 1次评论 → 1次查询积分
  * 每次执行都推送到钉钉
  * JavaScript版本，避免语言差距带来的性能差异
- */
+*/
 
 const https = require('https');
 const { exec } = require('child_process');
