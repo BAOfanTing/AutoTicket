@@ -20,8 +20,8 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # =========================参数配置======= = ==========================
 CHANNEL = "02"
-APP_VER_NO = "3.1.4"
-SES_ID = "a54f9aa8e2974e85b19ab9b8009a5101" # 重新登录后会变
+APP_VER_NO = "3.1.6"
+SES_ID = "86611a5f382b47348f67273e3ee166ac" # 重新登录后会变
 LOGIN_NAME_PLAINTEXT = "HFbSkQ7f/BeguGThXNyVwQ=="
 USER_ID_PLAINTEXT = "HFbSkQ7f/BeguGThXNyVwQ=="
 EXCHANGE_ID_PLAINTEXT = "10"   #9是2块,10是4块,11是6块
@@ -272,7 +272,28 @@ def wait_until_target():
         if now >= RUN_TIME:
             break
         # 控制检查频率到毫秒
-        # time.sleep(0.05)  # 0.5 毫秒检查一次
+        diff = (RUN_TIME - now).total_seconds()
+
+        # 距离超过 1 小时
+        if diff > 3600:
+            time.sleep(300)    # 5分钟
+        # 距离超过 10 分钟
+        elif diff > 600:
+            time.sleep(60)     # 1分钟
+        # 距离超过 1 分钟
+        elif diff > 60:
+            time.sleep(5)      # 5秒
+        # 距离超过 10 秒
+        elif diff > 10:
+            time.sleep(1)      # 1秒
+        # 距离超过 1 秒
+        elif diff > 1:
+            time.sleep(0.1)    # 100ms
+        # 距离目标时间 ≤ 1 秒，进入高精度轮询
+        elif diff > 0.01:
+            time.sleep(0.005)  # 5ms
+        else:
+            time.sleep(0.0005) # 0.5ms
 
 if __name__ == "__main__":
     main()
