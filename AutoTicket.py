@@ -281,19 +281,17 @@ def wait_until_target():
         elif diff > 600:
             time.sleep(60)     # 1分钟
         # 距离超过 1 分钟
-        elif diff > 60:
-            time.sleep(5)      # 5秒
-        # 距离超过 10 秒
-        elif diff > 10:
-            time.sleep(1)      # 1秒
-        # 距离超过 1 秒
+        if diff > 60:
+            time.sleep(30)
+            
+        # 情况 B: 距离较远 (> 1秒)
         elif diff > 1:
-            time.sleep(0.1)    # 100ms
-        # 距离目标时间 ≤ 1 秒，进入高精度轮询
-        elif diff > 0.01:
-            time.sleep(0.005)  # 5ms
+            time.sleep(0.5)
+            
+        # 情况 C: 临近了 (0.1秒 ~ 1秒)
         else:
-            time.sleep(0.0005) # 0.5ms
+            time.sleep(0.05)  # 50ms, 留出足够余量给系统调度
+
 
 if __name__ == "__main__":
     main()
