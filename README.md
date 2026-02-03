@@ -1,9 +1,13 @@
 # 杭工e家自动化脚本项目
 ![项目图片](https://socialify.git.ci/BAOfanTing/AutoTicket/image?custom_description=%E6%9D%AD%E5%B7%A5e%E5%AE%B6app%E9%80%86%E5%90%91%E5%AD%A6%E4%B9%A0&description=1&font=Inter&forks=1&language=1&name=1&owner=1&pattern=Plus&stargazers=1&theme=Dark)
 
-
 ## 更新日志
 
+### V1.0.5 2026.02.03
+
+2.3测试抢票功能正常
+
+![image-20260203090527018](https://gitee.com/baofanting/image/raw/master/image/20260203090527104.png)
 
 ### V1.0.5 2025.12.23
 实测0.05抢票间隔无法抢到,改为0.5或1可抢一张

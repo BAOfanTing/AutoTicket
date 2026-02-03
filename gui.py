@@ -88,7 +88,7 @@ class MainWindow(QWidget):
         self.check_update()
 
     def init_ui(self):
-        self.setWindowTitle(f'AutoTicket {updater.CURRENT_VERSION} --by bft')
+        self.setWindowTitle(f'AutoTicket {updater.CURRENT_VERSION} - 免费开源使用')
         self.setGeometry(100, 100, 600, 500)
 
         # 创建配置区域
@@ -118,9 +118,11 @@ class MainWindow(QWidget):
         button_layout = QHBoxLayout()
         self.start_button = QPushButton("启动")
         self.stop_button = QPushButton("停止")
+        self.github_button = QPushButton("GitHub")
         self.stop_button.setEnabled(False)
         button_layout.addWidget(self.start_button)
         button_layout.addWidget(self.stop_button)
+        button_layout.addWidget(self.github_button)
 
         # 创建日志显示区域
         self.log_display = QTextEdit()
@@ -137,6 +139,7 @@ class MainWindow(QWidget):
         # 连接信号和槽
         self.start_button.clicked.connect(self.start_program)
         self.stop_button.clicked.connect(self.stop_program)
+        self.github_button.clicked.connect(self.open_github)
 
         #输入后保存ses_id和login_name
         self.login_name_edit.textChanged.connect(self.save_config)
@@ -204,6 +207,12 @@ class MainWindow(QWidget):
         }
         with open(self.config_file, 'w') as f:
             json.dump(config, f, indent=4)
+    
+    def open_github(self):
+        import webbrowser
+        # 打开项目的GitHub页面
+        github_url = "https://github.com/BAOfanTing/AutoTicket"
+        webbrowser.open(github_url)
     
     def load_config(self):
         "从文件中加载"
