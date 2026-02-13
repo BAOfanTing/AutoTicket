@@ -21,13 +21,23 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # =========================参数配置======= = ==========================
 CHANNEL = "02"
 APP_VER_NO = "3.1.6"
-SES_ID = "86611a5f382b47348f67273e3ee166ac" # 重新登录后会变
+SES_ID = "ef9b576e637048d2a0dbb8c5dd7d7ee1" # 重新登录后会变
 LOGIN_NAME_PLAINTEXT = "HFbSkQ7f/BeguGThXNyVwQ=="
 USER_ID_PLAINTEXT = "HFbSkQ7f/BeguGThXNyVwQ=="
 EXCHANGE_ID_PLAINTEXT = "10"   #9是2块,10是4块,11是6块
 RUN_TIME = datetime(2025, 9, 9, 17, 00, 0, 300000)  # 2025-08-16 06:59:59.900
 RUN_COUNT = 100   # 运行次数
 timeSleep = 0.08  # 请求间隔   0.05 = 0.05秒发送一次
+
+# API端点配置（参考JavaScript版本的workflow_config.js）
+BASE_URL = 'https://app.hzgh.org.cn'
+ENDPOINTS = {
+    'login': '/unionApp/interf/front/U/U042',
+    'signin': '/unionApp/interf/front/U/U042',
+    'comment': '/unionApp/interf/front/AC/AC08',
+    'query': '/unionApp/interf/front/U/U005',
+    'exchange': '/unionApp/interf/front/OL/OL41'  # 兑换优惠券接口
+}
 # ======================================= = ==========================
 
 # 【密钥1】用于加密
@@ -258,6 +268,300 @@ def job():
             log_print(f"准备启动第{i+1}个线程，时间：{datetime.now()}")  # 替换原来的print
             executor.submit(run_exchange)
             time.sleep(timeSleep)
+
+# 模拟JavaScript版本的每日任务功能
+def daily_task_login():
+    """登录功能"""
+    payload = {
+        "channel": CHANNEL,
+        "app_ver_no": "3.1.4",  # 使用与JavaScript版本相同的版本号
+        "timestamp": int(time.time() * 1000),
+        "login_name": LOGIN_NAME_PLAINTEXT,
+        "ses_id": SES_ID
+    }
+    # 添加登录特定参数（参考JavaScript版本的functions.login）
+    payload.update({
+        "type": "1"  # 登录类型
+    })
+    
+    # 过滤空值
+    filtered_payload = {}
+    for key, value in payload.items():
+        if value is not None and value != "":
+            filtered_payload[key] = value
+        elif isinstance(value, (int, float)) and value == 0:
+            filtered_payload[key] = value
+    payload = filtered_payload
+
+    # 生成并加密3DES密钥
+    m = rand_str(24).upper()
+    dec_key = rsa_encrypt(ENCRYPTION_PUBLIC_KEY_PEM, m)
+    payload["dec_key"] = dec_key
+
+    # 加密指定字段
+    for key in ENCRYPT_KEYS:
+        if key in payload:
+            payload[key] = des3_ecb_pkcs7_encrypt(m, str(payload[key]))
+
+    # 准备签名字段
+    payload_for_signing = payload.copy()
+    for key in NO_SIGN_KEYS:
+        if key in payload_for_signing:
+            del payload_for_signing[key]
+
+    keys_for_sign = list(payload_for_signing.keys())
+    values_for_sign = [str(v) for v in payload_for_signing.values()]
+
+    # 计算RSA签名
+    values_concat = "".join(values_for_sign)
+    string_to_sign = values_concat + SIGN_KEY_NEW
+    sign = rsa_sha256_sign(SIGNING_PRIVATE_KEY_PEM, string_to_sign)
+
+    # 组装最终请求体
+    payload["key"] = ",".join(keys_for_sign)
+    payload["sign"] = sign
+
+    # 使用登录端点URL
+    login_url = BASE_URL + ENDPOINTS['login']
+    resp = session.post(login_url, json=payload, verify=False)
+    try:
+        resp_json = resp.json()
+        if "data2" in resp_json:
+            decrypted_json = decrypt_data2(resp_json["data2"])
+            log_print(f"登录结果: {decrypted_json}")
+        else:
+            log_print("登录响应中没有 data2 字段")
+    except Exception as e:
+        log_print(f"登录请求失败: {e}")
+
+def daily_task_signin(signin_number=1):
+    """签到功能"""
+    payload = {
+        "channel": CHANNEL,
+        "app_ver_no": "3.1.4",  # 使用与JavaScript版本相同的版本号
+        "timestamp": int(time.time() * 1000),
+        "login_name": LOGIN_NAME_PLAINTEXT,
+        "ses_id": SES_ID
+    }
+    # 添加签到特定参数（参考JavaScript版本的functions.signin）
+    payload.update({
+        "type": "5"  # 签到类型
+    })
+    
+    # 过滤空值
+    filtered_payload = {}
+    for key, value in payload.items():
+        if value is not None and value != "":
+            filtered_payload[key] = value
+        elif isinstance(value, (int, float)) and value == 0:
+            filtered_payload[key] = value
+    payload = filtered_payload
+
+    # 生成并加密3DES密钥
+    m = rand_str(24).upper()
+    dec_key = rsa_encrypt(ENCRYPTION_PUBLIC_KEY_PEM, m)
+    payload["dec_key"] = dec_key
+
+    # 加密指定字段
+    for key in ENCRYPT_KEYS:
+        if key in payload:
+            payload[key] = des3_ecb_pkcs7_encrypt(m, str(payload[key]))
+
+    # 准备签名字段
+    payload_for_signing = payload.copy()
+    for key in NO_SIGN_KEYS:
+        if key in payload_for_signing:
+            del payload_for_signing[key]
+
+    keys_for_sign = list(payload_for_signing.keys())
+    values_for_sign = [str(v) for v in payload_for_signing.values()]
+
+    # 计算RSA签名
+    values_concat = "".join(values_for_sign)
+    string_to_sign = values_concat + SIGN_KEY_NEW
+    sign = rsa_sha256_sign(SIGNING_PRIVATE_KEY_PEM, string_to_sign)
+
+    # 组装最终请求体
+    payload["key"] = ",".join(keys_for_sign)
+    payload["sign"] = sign
+
+    # 使用签到端点URL
+    signin_url = BASE_URL + ENDPOINTS['signin']
+    resp = session.post(signin_url, json=payload, verify=False)
+    try:
+        resp_json = resp.json()
+        if "data2" in resp_json:
+            decrypted_json = decrypt_data2(resp_json["data2"])
+            log_print(f"第{signin_number}次签到结果: {decrypted_json}")
+        else:
+            log_print("签到响应中没有 data2 字段")
+    except Exception as e:
+        log_print(f"签到请求失败: {e}")
+
+def daily_task_comment():
+    """评论功能"""
+    payload = {
+        "channel": CHANNEL,
+        "app_ver_no": "3.1.4",  # 使用与JavaScript版本相同的版本号
+        "timestamp": int(time.time() * 1000),
+        "login_name": LOGIN_NAME_PLAINTEXT,
+        "ses_id": SES_ID
+    }
+    # 添加评论特定参数（参考JavaScript版本的functions.comment）
+    payload.update({
+        "related_id": "1232",
+        "content_type": "1",
+        "oper_type": "0",
+        "suffix": "png",
+        "content": "好"  # 默认评论内容
+    })
+    
+    # 过滤空值
+    filtered_payload = {}
+    for key, value in payload.items():
+        if value is not None and value != "":
+            filtered_payload[key] = value
+        elif isinstance(value, (int, float)) and value == 0:
+            filtered_payload[key] = value
+    payload = filtered_payload
+
+    # 生成并加密3DES密钥
+    m = rand_str(24).upper()
+    dec_key = rsa_encrypt(ENCRYPTION_PUBLIC_KEY_PEM, m)
+    payload["dec_key"] = dec_key
+
+    # 加密指定字段
+    for key in ENCRYPT_KEYS:
+        if key in payload:
+            payload[key] = des3_ecb_pkcs7_encrypt(m, str(payload[key]))
+
+    # 准备签名字段
+    payload_for_signing = payload.copy()
+    for key in NO_SIGN_KEYS:
+        if key in payload_for_signing:
+            del payload_for_signing[key]
+
+    keys_for_sign = list(payload_for_signing.keys())
+    values_for_sign = [str(v) for v in payload_for_signing.values()]
+
+    # 计算RSA签名
+    values_concat = "".join(values_for_sign)
+    string_to_sign = values_concat + SIGN_KEY_NEW
+    sign = rsa_sha256_sign(SIGNING_PRIVATE_KEY_PEM, string_to_sign)
+
+    # 组装最终请求体
+    payload["key"] = ",".join(keys_for_sign)
+    payload["sign"] = sign
+
+    # 使用评论端点URL
+    comment_url = BASE_URL + ENDPOINTS['comment']
+    resp = session.post(comment_url, json=payload, verify=False)
+    try:
+        resp_json = resp.json()
+        if "data2" in resp_json:
+            decrypted_json = decrypt_data2(resp_json["data2"])
+            log_print(f"评论结果: {decrypted_json}")
+        else:
+            log_print("评论响应中没有 data2 字段")
+    except Exception as e:
+        log_print(f"评论请求失败: {e}")
+
+def daily_task_query():
+    """查询积分功能"""
+    payload = {
+        "channel": CHANNEL,
+        "app_ver_no": "3.1.4",  # 使用与JavaScript版本相同的版本号
+        "timestamp": int(time.time() * 1000),
+        "login_name": LOGIN_NAME_PLAINTEXT,
+        "ses_id": SES_ID
+    }
+    # 添加查询特定参数（参考JavaScript版本的functions.query）
+    # 查询功能不需要额外参数
+    
+    # 过滤空值
+    filtered_payload = {}
+    for key, value in payload.items():
+        if value is not None and value != "":
+            filtered_payload[key] = value
+        elif isinstance(value, (int, float)) and value == 0:
+            filtered_payload[key] = value
+    payload = filtered_payload
+
+    # 生成并加密3DES密钥
+    m = rand_str(24).upper()
+    dec_key = rsa_encrypt(ENCRYPTION_PUBLIC_KEY_PEM, m)
+    payload["dec_key"] = dec_key
+
+    # 加密指定字段
+    for key in ENCRYPT_KEYS:
+        if key in payload:
+            payload[key] = des3_ecb_pkcs7_encrypt(m, str(payload[key]))
+
+    # 准备签名字段
+    payload_for_signing = payload.copy()
+    for key in NO_SIGN_KEYS:
+        if key in payload_for_signing:
+            del payload_for_signing[key]
+
+    keys_for_sign = list(payload_for_signing.keys())
+    values_for_sign = [str(v) for v in payload_for_signing.values()]
+
+    # 计算RSA签名
+    values_concat = "".join(values_for_sign)
+    string_to_sign = values_concat + SIGN_KEY_NEW
+    sign = rsa_sha256_sign(SIGNING_PRIVATE_KEY_PEM, string_to_sign)
+
+    # 组装最终请求体
+    payload["key"] = ",".join(keys_for_sign)
+    payload["sign"] = sign
+
+    # 使用查询端点URL
+    query_url = BASE_URL + ENDPOINTS['query']
+    resp = session.post(query_url, json=payload, verify=False)
+    try:
+        resp_json = resp.json()
+        if "data2" in resp_json:
+            decrypted_json = decrypt_data2(resp_json["data2"])
+            log_print(f"查询积分结果: {decrypted_json}")
+        else:
+            log_print("查询积分响应中没有 data2 字段")
+    except Exception as e:
+        log_print(f"查询积分请求失败: {e}")
+
+def daily_task_workflow():
+    """执行完整的每日任务工作流：登录→3次签到→评论→查询积分"""
+    log_print("🎯 开始执行每日任务工作流")
+    log_print("=" * 40)
+    log_print("工作流: 登录 → 3次签到 → 评论 → 查询积分")
+    log_print("=" * 40)
+    
+    try:
+        # 执行登录
+        log_print("\n🔄 开始执行登录...")
+        daily_task_login()
+        time.sleep(1)  # 等待1秒
+        
+        # 执行3次签到
+        log_print("\n🔄 开始执行3次签到...")
+        for i in range(1, 4):
+            log_print(f"\n第 {i} 次签到:")
+            daily_task_signin(i)
+            time.sleep(1)  # 等待1秒
+        
+        # 执行评论
+        log_print("\n🔄 开始执行评论...")
+        daily_task_comment()
+        time.sleep(1)  # 等待1秒
+        
+        # 执行查询积分
+        log_print("\n🔄 开始查询积分...")
+        daily_task_query()
+        
+        log_print("\n🎉 每日任务工作流执行完成!")
+        log_print("=" * 40)
+        
+    except Exception as e:
+        log_print(f"❌ 每日任务执行失败: {e}")
 
 # 修改main函数中的print语句
 def main():

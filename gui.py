@@ -118,10 +118,12 @@ class MainWindow(QWidget):
         button_layout = QHBoxLayout()
         self.start_button = QPushButton("启动")
         self.stop_button = QPushButton("停止")
+        self.daily_task_button = QPushButton("执行每日任务")
         self.github_button = QPushButton("GitHub")
         self.stop_button.setEnabled(False)
         button_layout.addWidget(self.start_button)
         button_layout.addWidget(self.stop_button)
+        button_layout.addWidget(self.daily_task_button)
         button_layout.addWidget(self.github_button)
 
         # 创建日志显示区域
@@ -139,6 +141,7 @@ class MainWindow(QWidget):
         # 连接信号和槽
         self.start_button.clicked.connect(self.start_program)
         self.stop_button.clicked.connect(self.stop_program)
+        self.daily_task_button.clicked.connect(self.execute_daily_task)
         self.github_button.clicked.connect(self.open_github)
 
         #输入后保存ses_id和login_name
@@ -186,6 +189,57 @@ class MainWindow(QWidget):
         self.start_button.setEnabled(True)
         self.stop_button.setEnabled(False)
         self.update_log("程序已停止")
+        
+    def execute_daily_task(self):
+        """执行每日任务：登录→3次签到→评论→查询积分"""
+        # 获取配置参数
+        login_name = self.login_name_edit.text()
+        ses_id = self.ses_id_edit.text()
+        exchange_id = self.exchange_id_edit.text()
+        
+        # 验证必要参数
+        if not all([login_name, ses_id]):
+            QMessageBox.warning(self, "输入错误", "LOGIN_NAME和SES_ID字段必须填写！")
+            return
+        
+        # 验证参数格式
+        try:
+            # 尝试导入AutoTicket模块中的函数
+            import AutoTicket
+            # 更新AutoTicket模块中的全局变量
+            AutoTicket.LOGIN_NAME_PLAINTEXT = login_name
+            AutoTicket.USER_ID_PLAINTEXT = login_name
+            AutoTicket.SES_ID = ses_id
+            AutoTicket.EXCHANGE_ID_PLAINTEXT = exchange_id
+        except Exception as e:
+            self.update_log(f"初始化每日任务失败: {str(e)}")
+            return
+        
+        # 禁用其他按钮，防止重复点击
+        self.start_button.setEnabled(False)
+        self.stop_button.setEnabled(False)
+        self.daily_task_button.setEnabled(False)
+        
+        # 在单独的线程中执行每日任务
+        self.daily_task_thread = threading.Thread(target=self.run_daily_task)
+        self.daily_task_thread.start()
+        
+    def run_daily_task(self):
+        """在后台线程中运行每日任务"""
+        try:
+            import AutoTicket
+            # 设置日志回调
+            AutoTicket.set_log_callback(self.update_log)
+            # 执行每日任务工作流
+            AutoTicket.daily_task_workflow()
+        except Exception as e:
+            self.update_log(f"执行每日任务时出错: {str(e)}")
+        finally:
+            # 重新启用按钮
+            self.start_button.setEnabled(True)
+            self.stop_button.setEnabled(False)
+            self.daily_task_button.setEnabled(True)
+            self.update_log("每日任务执行完成")
         
     def update_log(self, message):
         timestamp = QDateTime.currentDateTime().toString("yyyy-MM-dd hh:mm:ss")
