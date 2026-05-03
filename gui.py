@@ -1,14 +1,113 @@
 import sys
-from PyQt5.QtWidgets import (QApplication, QWidget, QLabel, QLineEdit, QPushButton, 
+from PyQt5.QtWidgets import (QApplication, QWidget, QLabel, QLineEdit, QPushButton,
                              QTextEdit, QVBoxLayout, QHBoxLayout, QGroupBox, QFormLayout,
                              QMessageBox)
-from PyQt5.QtCore import QThread, pyqtSignal, QDateTime, QTimer
+from PyQt5.QtCore import QThread, pyqtSignal, QDateTime, QTimer, Qt
+from PyQt5.QtGui import QIcon
 import AutoTicket
 import time
 import threading
 import json
 import os
 import updater
+
+APP_STYLESHEET = """
+QWidget {
+    color: #1d1d1f;
+    background: #ffffff;
+    font-size: 15px;
+}
+QWidget#mainWindow {
+    background: #ffffff;
+}
+QLabel {
+    background: transparent;
+    color: #3a3a3c;
+    font-weight: 600;
+}
+QGroupBox {
+    background: #fbfbfd;
+    border: 1px solid #e5e5ea;
+    border-radius: 18px;
+    margin-top: 14px;
+    color: #1d1d1f;
+    font-weight: 600;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    left: 16px;
+    padding: 0 6px;
+    background: #fbfbfd;
+    color: #6e6e73;
+}
+QLineEdit,
+QTextEdit {
+    background: #ffffff;
+    border: 1px solid #d2d2d7;
+    border-radius: 12px;
+    padding: 8px 12px;
+    selection-background-color: #0a84ff;
+    selection-color: #ffffff;
+}
+QLineEdit:focus,
+QTextEdit:focus {
+    border: 1px solid #0a84ff;
+}
+QTextEdit#logPanel {
+    color: #1d1d1f;
+}
+QPushButton {
+    background: #f5f5f7;
+    border: 1px solid #d2d2d7;
+    border-radius: 12px;
+    padding: 8px 18px;
+    color: #1d1d1f;
+    font-weight: 600;
+}
+QPushButton:hover {
+    background: #ededf0;
+}
+QPushButton:pressed {
+    background: #e4e4e8;
+}
+QPushButton:disabled {
+    background: #f7f7f8;
+    border: 1px solid #e5e5ea;
+    color: #a1a1aa;
+}
+QPushButton#primaryButton {
+    background: #007aff;
+    border: 1px solid #007aff;
+    color: #ffffff;
+    font-weight: 600;
+}
+QPushButton#primaryButton:hover {
+    background: #0a84ff;
+    border-color: #0a84ff;
+}
+QPushButton#primaryButton:pressed {
+    background: #0063ce;
+    border-color: #0063ce;
+}
+QPushButton#primaryButton:disabled {
+    background: #bcdcff;
+    border-color: #bcdcff;
+    color: #ffffff;
+}
+QPushButton#stopButton {
+    background: #fff5f4;
+    border: 1px solid #ffd5d2;
+    color: #ff3b30;
+    font-weight: 600;
+}
+QPushButton#stopButton:hover {
+    background: #ffeceb;
+}
+QPushButton#stopButton:pressed {
+    background: #ffe1df;
+}
+"""
+
 # pyinstaller --onefile --windowed --icon=./icon.ico -n AutoTicket gui.py
 class Worker(QThread):
     log_signal = pyqtSignal(str)
@@ -88,54 +187,94 @@ class MainWindow(QWidget):
         self.check_update()
 
     def init_ui(self):
+        self.setObjectName("mainWindow")
         self.setWindowTitle(f'AutoTicket {updater.CURRENT_VERSION} - 免费开源使用')
-        self.setGeometry(100, 100, 600, 500)
+        self.setWindowIcon(QIcon(os.path.join(os.path.dirname(__file__), "icon.ico")))
+        self.setGeometry(100, 100, 820, 720)
+        self.setMinimumSize(760, 660)
 
         # 创建配置区域
         config_group = QGroupBox("配置参数")
         config_layout = QFormLayout()
-        
+        config_layout.setHorizontalSpacing(18)
+        config_layout.setVerticalSpacing(14)
+        config_layout.setContentsMargins(20, 26, 20, 20)
+        config_layout.setLabelAlignment(Qt.AlignRight | Qt.AlignVCenter)
+
         self.login_name_edit = QLineEdit(AutoTicket.LOGIN_NAME_PLAINTEXT)
         self.ses_id_edit = QLineEdit(AutoTicket.SES_ID)
         self.exchange_id_edit = QLineEdit(AutoTicket.EXCHANGE_ID_PLAINTEXT)
-        
+
         # 设置默认时间，但允许用户手动修改
         default_time = self.get_next_run_time()
         self.run_time_edit = QLineEdit(default_time)
         self.run_count_edit = QLineEdit(str(AutoTicket.RUN_COUNT))
         self.time_sleep_edit = QLineEdit(str(AutoTicket.timeSleep))
-        
-        config_layout.addRow(QLabel("LOGIN_NAME/USER_ID:"), self.login_name_edit)
-        config_layout.addRow(QLabel("SES_ID:"), self.ses_id_edit)
-        config_layout.addRow(QLabel("EXCHANGE_ID:#9是2块,10是4块,11是6块"), self.exchange_id_edit)
+
+        self.login_name_edit.setPlaceholderText("请输入 LOGIN_NAME / USER_ID")
+        self.ses_id_edit.setPlaceholderText("请输入 SES_ID")
+        self.exchange_id_edit.setPlaceholderText("例如 9 / 10 / 11")
+        self.run_time_edit.setPlaceholderText("YYYY-MM-DD HH:MM:SS")
+        self.run_count_edit.setPlaceholderText("请输入运行次数")
+        self.time_sleep_edit.setPlaceholderText("请输入运行间隔")
+
+        for line_edit in [
+            self.login_name_edit,
+            self.ses_id_edit,
+            self.exchange_id_edit,
+            self.run_time_edit,
+            self.run_count_edit,
+            self.time_sleep_edit,
+        ]:
+            line_edit.setMinimumHeight(46)
+
+        config_layout.addRow(QLabel("LOGIN_NAME / USER_ID"), self.login_name_edit)
+        config_layout.addRow(QLabel("SES_ID"), self.ses_id_edit)
+        config_layout.addRow(QLabel("EXCHANGE_ID（9=2块 / 10=4块 / 11=6块）"), self.exchange_id_edit)
         config_layout.addRow(QLabel("抢票时间"), self.run_time_edit)
-        config_layout.addRow(QLabel("运行次数:"), self.run_count_edit)
-        config_layout.addRow(QLabel("运行间隔:"), self.time_sleep_edit)
-        
+        config_layout.addRow(QLabel("运行次数"), self.run_count_edit)
+        config_layout.addRow(QLabel("运行间隔"), self.time_sleep_edit)
+
         config_group.setLayout(config_layout)
 
         # 创建按钮区域
         button_layout = QHBoxLayout()
+        button_layout.setSpacing(12)
         self.start_button = QPushButton("启动")
         self.stop_button = QPushButton("停止")
         self.daily_task_button = QPushButton("执行每日任务")
         self.github_button = QPushButton("GitHub")
+        self.start_button.setObjectName("primaryButton")
+        self.stop_button.setObjectName("stopButton")
         self.stop_button.setEnabled(False)
+
+        for button in [self.start_button, self.stop_button, self.daily_task_button, self.github_button]:
+            button.setMinimumHeight(48)
+
         button_layout.addWidget(self.start_button)
         button_layout.addWidget(self.stop_button)
         button_layout.addWidget(self.daily_task_button)
         button_layout.addWidget(self.github_button)
 
         # 创建日志显示区域
+        log_group = QGroupBox("运行日志")
+        log_layout = QVBoxLayout()
+        log_layout.setContentsMargins(20, 26, 20, 20)
+        log_layout.setSpacing(12)
         self.log_display = QTextEdit()
+        self.log_display.setObjectName("logPanel")
         self.log_display.setReadOnly(True)
+        self.log_display.setMinimumHeight(220)
+        log_layout.addWidget(self.log_display)
+        log_group.setLayout(log_layout)
 
         # 主布局
         main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(24, 24, 24, 24)
+        main_layout.setSpacing(16)
         main_layout.addWidget(config_group)
         main_layout.addLayout(button_layout)
-        main_layout.addWidget(QLabel("运行日志:"))
-        main_layout.addWidget(self.log_display)
+        main_layout.addWidget(log_group)
         self.setLayout(main_layout)
 
         # 连接信号和槽
@@ -355,6 +494,8 @@ class MainWindow(QWidget):
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
+    app.setStyle("Fusion")
+    app.setStyleSheet(APP_STYLESHEET)
     window = MainWindow()
     window.show()
     sys.exit(app.exec_())
