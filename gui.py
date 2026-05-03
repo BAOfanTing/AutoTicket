@@ -2,7 +2,11 @@ import sys
 from PyQt5.QtWidgets import (QApplication, QWidget, QLabel, QLineEdit, QPushButton,
                              QTextEdit, QVBoxLayout, QHBoxLayout, QGroupBox, QFormLayout,
                              QMessageBox)
+<<<<<<< HEAD
 from PyQt5.QtCore import QThread, pyqtSignal, QDateTime, Qt
+=======
+from PyQt5.QtCore import QThread, pyqtSignal, QDateTime, QTimer, Qt
+>>>>>>> c1f27e830a6e600b6fde59ce2e969e5c8de75d25
 from PyQt5.QtGui import QIcon
 import AutoTicket
 import time
