@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//mnt/c/Users/BAOfanTing/OneDrive/Desktop/cache/Autoticket/**)",
+      "Read(//mnt/c/Users/BAOfanTing/OneDrive/Desktop/cache/Autoticket/AutoTicket/**)",
+      "Bash(python *)"
+    ]
+  }
+}
