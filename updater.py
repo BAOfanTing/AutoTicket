@@ -1,11 +1,12 @@
 import requests
 import json
+import time
 from PyQt5.QtCore import QThread, pyqtSignal
 import sys
 import os
 
 # 当前版本号
-CURRENT_VERSION = "1.0.6"
+CURRENT_VERSION = "1.0.7"
 
 class UpdateChecker(QThread):
     #定义信号,用于向主线程发送检查结果
@@ -18,18 +19,25 @@ class UpdateChecker(QThread):
 
     def run(self):
         try:
-            # 首先尝试HTTPS连接
-            response = requests.get(self.server_url, timeout=10)
-            response.raise_for_status()  # 检查请求是否成功
-            # 解析服务器响应
+            response = requests.get(
+                self.server_url,
+                params={"t": int(time.time())},
+                headers={
+                    "Cache-Control": "no-cache, no-store, must-revalidate",
+                    "Pragma": "no-cache",
+                    "Expires": "0",
+                },
+                timeout=10,
+            )
+            response.raise_for_status()
             data = response.json()
             print(data)
-            latest_version = data.get("version")
-            download_url = data.get("download_url")
+            latest_version = data.get("version", "")
+            download_url = data.get("download_url", "")
             if self.is_newer_version(latest_version, CURRENT_VERSION):
                 self.sig_update.emit(True, latest_version, download_url, "有最新版本!")
             else:
-                self.sig_update.emit(False, latest_version, "", "无更新")
+                self.sig_update.emit(False, latest_version, download_url, "无更新")
         except requests.exceptions.SSLError as e:
             # SSL错误处理
             print(f"SSL连接失败: {e}")
