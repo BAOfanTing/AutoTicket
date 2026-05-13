@@ -4,7 +4,14 @@
       "Read(//mnt/c/Users/BAOfanTing/OneDrive/Desktop/cache/Autoticket/**)",
       "Read(//mnt/c/Users/BAOfanTing/OneDrive/Desktop/cache/Autoticket/AutoTicket/**)",
       "Bash(python *)",
-      "Bash(PYTHONPATH=\"C:/Users/BAOfanTing/OneDrive/Desktop/cache/Autoticket/AutoTicket\" QT_QPA_PLATFORM=offscreen python *)"
+      "Bash(PYTHONPATH=\"C:/Users/BAOfanTing/OneDrive/Desktop/cache/Autoticket/AutoTicket\" QT_QPA_PLATFORM=offscreen python *)",
+      "Bash(npm run *)",
+      "Bash(rm -rf node_modules)",
+      "Bash(npm install *)",
+      "Bash(npm ls *)",
+      "Bash(npm config *)",
+      "Bash(npx vite *)",
+      "Bash(npm ci *)"
     ]
   }
 }

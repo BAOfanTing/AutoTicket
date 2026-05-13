@@ -1,0 +1,21 @@
+{
+  "pages": [
+    {
+      "path": "pages/login/login",
+      "style": {
+        "navigationBarTitleText": "账号登录"
+      }
+    },
+    {
+      "path": "pages/main/main",
+      "style": {
+        "navigationBarTitleText": "AutoTicket"
+      }
+    }
+  ],
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarBackgroundColor": "#FFFFFF",
+    "backgroundColor": "#F5F5F7"
+  }
+}
