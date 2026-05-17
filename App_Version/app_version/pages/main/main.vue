@@ -1,5 +1,9 @@
 <template>
   <view class="page">
+    <view class="hero">
+      <image class="hero-image" src="../../resouse/home.jpg" mode="widthFix" />
+    </view>
+
     <view class="card status-card">
       <view class="row">
         <text class="label">登录状态</text>
@@ -240,6 +244,16 @@ watch(form, () => { persistConfig() }, { deep: true })
   min-height: 100vh;
   padding: 20rpx;
   box-sizing: border-box;
+}
+
+.hero {
+  margin-bottom: 20rpx;
+}
+
+.hero-image {
+  display: block;
+  width: 100%;
+  border-radius: 20rpx;
 }
 
 .card {

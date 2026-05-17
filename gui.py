@@ -110,42 +110,84 @@ QPushButton#stopButton:pressed {
 """
 
 class LoginDialog(QDialog):
-    def __init__(self, captcha_bytes, parent=None):
+    def __init__(self, captcha_data, parent=None):
         super().__init__(parent)
         self.setWindowTitle("账号登录")
         self.setModal(True)
-        self.setMinimumWidth(360)
+        self.setMinimumWidth(400)
+        self.captcha_data = captcha_data
+        self.sms_countdown_sec = 0
+        self.sms_timer = QTimer(self)
+        self.sms_timer.timeout.connect(self._on_sms_timer)
 
         layout = QVBoxLayout()
+        layout.setSpacing(12)
+
+        # 登录方式切换
+        mode_layout = QHBoxLayout()
+        self.btn_password_mode = QPushButton("密码登录")
+        self.btn_sms_mode = QPushButton("短信验证码登录")
+        for btn in [self.btn_password_mode, self.btn_sms_mode]:
+            btn.setCheckable(True)
+            btn.setMinimumHeight(38)
+            btn.setStyleSheet(
+                "QPushButton { border: 1px solid #d2d2d7; border-radius: 8px; background: #f5f5f7; color: #6e6e73; font-weight: 600; }"
+                "QPushButton:checked { background: #007aff; color: #fff; border-color: #007aff; }"
+            )
+        self.btn_password_mode.setChecked(True)
+        mode_layout.addWidget(self.btn_password_mode)
+        mode_layout.addWidget(self.btn_sms_mode)
+        layout.addLayout(mode_layout)
+
         form_layout = QFormLayout()
+        self.form_layout = form_layout  # 供 _switch_mode 使用
         form_layout.setHorizontalSpacing(18)
         form_layout.setVerticalSpacing(14)
 
+        # 手机号（共用）
         self.phone_edit = QLineEdit()
         self.phone_edit.setPlaceholderText("请输入手机号")
 
+        # 密码（密码模式）
         self.password_edit = QLineEdit()
         self.password_edit.setPlaceholderText("请输入密码")
         self.password_edit.setEchoMode(QLineEdit.Password)
 
+        # 图形验证码
         self.captcha_label = QLabel()
         self.captcha_label.setAlignment(Qt.AlignCenter)
         self.captcha_label.setMinimumHeight(100)
         self.captcha_label.setStyleSheet("border: 1px solid #d2d2d7; border-radius: 12px; background: #ffffff;")
+        captcha_bytes = Login.decode_captcha_image(captcha_data)
         pixmap = QPixmap()
         pixmap.loadFromData(captcha_bytes)
         self.captcha_label.setPixmap(pixmap)
 
         self.captcha_edit = QLineEdit()
-        self.captcha_edit.setPlaceholderText("请输入验证码")
+        self.captcha_edit.setPlaceholderText("请输入图形验证码")
 
-        for line_edit in [self.phone_edit, self.password_edit, self.captcha_edit]:
+        # 短信验证码（短信模式）
+        self.sms_code_edit = QLineEdit()
+        self.sms_code_edit.setPlaceholderText("请输入短信验证码")
+        self.btn_send_sms = QPushButton("获取验证码")
+        self.btn_send_sms.setMinimumHeight(42)
+        self.btn_send_sms.setStyleSheet(
+            "QPushButton { background: #007aff; color: #fff; border: 1px solid #007aff; border-radius: 8px; font-weight: 600; }"
+            "QPushButton:disabled { background: #bcdcff; border-color: #bcdcff; }"
+        )
+
+        sms_row = QHBoxLayout()
+        sms_row.addWidget(self.sms_code_edit, 1)
+        sms_row.addWidget(self.btn_send_sms)
+
+        for line_edit in [self.phone_edit, self.password_edit, self.captcha_edit, self.sms_code_edit]:
             line_edit.setMinimumHeight(42)
 
         form_layout.addRow(QLabel("手机号"), self.phone_edit)
         form_layout.addRow(QLabel("密码"), self.password_edit)
         form_layout.addRow(QLabel("验证码"), self.captcha_label)
         form_layout.addRow(QLabel("输入验证码"), self.captcha_edit)
+        form_layout.addRow(QLabel("短信验证码"), sms_row)
 
         button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         button_box.accepted.connect(self.accept)
@@ -155,11 +197,91 @@ class LoginDialog(QDialog):
         layout.addWidget(button_box)
         self.setLayout(layout)
 
+        # 信号连接
+        self.btn_password_mode.clicked.connect(lambda: self._switch_mode("password"))
+        self.btn_sms_mode.clicked.connect(lambda: self._switch_mode("sms"))
+        self.btn_send_sms.clicked.connect(self._on_send_sms)
+
+        # 初始状态（默认密码模式）
+        self._switch_mode("password")
+
+    def _switch_mode(self, mode):
+        self.login_mode = mode
+        self.btn_password_mode.setChecked(mode == "password")
+        self.btn_sms_mode.setChecked(mode == "sms")
+        # 密码行显隐
+        for i in range(self.form_layout.rowCount()):
+            label_item = self.form_layout.itemAt(i, QFormLayout.LabelRole)
+            if label_item and label_item.widget() and label_item.widget().text() == "密码":
+                label_item.widget().setVisible(mode == "password")
+                field_item = self.form_layout.itemAt(i, QFormLayout.FieldRole)
+                if field_item:
+                    w = field_item.widget()
+                    if w:
+                        w.setVisible(mode == "password")
+                break
+        # 短信验证码行显隐
+        for i in range(self.form_layout.rowCount()):
+            label_item = self.form_layout.itemAt(i, QFormLayout.LabelRole)
+            if label_item and label_item.widget() and label_item.widget().text() == "短信验证码":
+                label_item.widget().setVisible(mode == "sms")
+                field_item = self.form_layout.itemAt(i, QFormLayout.FieldRole)
+                if field_item:
+                    w = field_item.widget()
+                    if w:
+                        w.setVisible(mode == "sms")
+                    else:
+                        for j in range(field_item.layout().count()):
+                            field_item.layout().itemAt(j).widget().setVisible(mode == "sms")
+                break
+
+    def _on_send_sms(self):
+        phone = self.phone_edit.text().strip()
+        captcha = self.captcha_edit.text().strip()
+        if not phone:
+            QMessageBox.warning(self, "输入错误", "请先输入手机号")
+            return
+        if not captcha:
+            QMessageBox.warning(self, "输入错误", "请先输入图形验证码")
+            return
+
+        self.btn_send_sms.setEnabled(False)
+        self.btn_send_sms.setText("发送中...")
+        QApplication.processEvents()
+
+        try:
+            result = Login.send_sms(self.captcha_data, phone, captcha)
+            if result and result.get("result") == "0":
+                self.sms_countdown_sec = 60
+                self.btn_send_sms.setText(f"重新发送({self.sms_countdown_sec}s)")
+                self.sms_timer.start(1000)
+                QMessageBox.information(self, "发送成功", "短信验证码已发送，请注意查收")
+            else:
+                msg = (result and result.get("msg")) or "发送失败"
+                QMessageBox.warning(self, "发送失败", msg)
+                self.btn_send_sms.setEnabled(True)
+                self.btn_send_sms.setText("获取验证码")
+        except Exception as e:
+            QMessageBox.warning(self, "发送失败", str(e))
+            self.btn_send_sms.setEnabled(True)
+            self.btn_send_sms.setText("获取验证码")
+
+    def _on_sms_timer(self):
+        self.sms_countdown_sec -= 1
+        if self.sms_countdown_sec <= 0:
+            self.sms_timer.stop()
+            self.btn_send_sms.setEnabled(True)
+            self.btn_send_sms.setText("获取验证码")
+        else:
+            self.btn_send_sms.setText(f"重新发送({self.sms_countdown_sec}s)")
+
     def get_login_input(self):
         return {
+            "mode": self.login_mode,
             "phone": self.phone_edit.text().strip(),
             "password": self.password_edit.text(),
             "captcha": self.captcha_edit.text().strip(),
+            "sms_code": self.sms_code_edit.text().strip(),
         }
 
 
@@ -427,24 +549,37 @@ class MainWindow(QWidget):
                 self.update_log("获取验证码失败")
                 return
 
-            captcha_bytes = Login.decode_captcha_image(captcha_data)
-            dialog = LoginDialog(captcha_bytes, self)
+            dialog = LoginDialog(captcha_data, self)
             if dialog.exec_() != QDialog.Accepted:
                 self.update_log("已取消登录")
                 return
 
             login_input = dialog.get_login_input()
-            if not all(login_input.values()):
-                QMessageBox.warning(self, "输入错误", "手机号、密码和验证码都必须填写！")
-                return
+            if login_input["mode"] == "sms":
+                # 短信验证码登录
+                if not login_input["phone"] or not login_input["sms_code"]:
+                    QMessageBox.warning(self, "输入错误", "手机号和短信验证码都必须填写！")
+                    return
 
-            self.update_log("正在提交登录请求...")
-            login_result = Login.login_u004_with_code(
-                captcha_data,
-                login_input["phone"],
-                login_input["password"],
-                login_input["captcha"],
-            )
+                self.update_log("正在提交短信验证码登录...")
+                login_result = Login.login_u065(
+                    login_input["phone"],
+                    login_input["sms_code"],
+                )
+            else:
+                # 密码登录
+                if not all([login_input["phone"], login_input["password"], login_input["captcha"]]):
+                    QMessageBox.warning(self, "输入错误", "手机号、密码和验证码都必须填写！")
+                    return
+
+                self.update_log("正在提交登录请求...")
+                login_result = Login.login_u004_with_code(
+                    captcha_data,
+                    login_input["phone"],
+                    login_input["password"],
+                    login_input["captcha"],
+                )
+
             if not login_result or login_result.get("result") != "0":
                 message = "登录失败"
                 if login_result and login_result.get("msg"):

@@ -3,7 +3,7 @@
     {
       "path": "pages/login/login",
       "style": {
-        "navigationBarTitleText": "账号登录"
+        "navigationBarTitleText": "AutoTicket账号登录"
       }
     },
     {

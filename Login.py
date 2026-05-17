@@ -174,7 +174,124 @@ def get_captcha_u067():
 
 
 
-# ================= 5. 业务逻辑：执行登录 (U004) =================
+# ================= 5. 业务逻辑：发送短信验证码 (SMS/SMS1) =================
+def send_sms(captcha_data, phone, img_auth_code, sms_type="10"):
+    """
+    请求 SMS/SMS1 接口，发送短信验证码到手机。
+    sms_type: "10" 为登录验证码
+    """
+    if not captcha_data or not captcha_data.get("imgUniCode"):
+        raise ValueError("验证码数据异常，缺少 imgUniCode。")
+    if not phone or not img_auth_code:
+        raise ValueError("手机号和图形验证码都必须填写。")
+
+    payload = {
+        "channel": CHANNEL,
+        "app_ver_no": APP_VER_NO,
+        "timestamp": str(int(time.time() * 1000)),
+        "term_sys_ver": "12",
+        "root": "0",
+        "term_sys": "2",
+        "model": "24031PN0DC",
+        "login_name": phone,
+        "mobile": phone,
+        "imgUniCode": captcha_data["imgUniCode"],
+        "imgAuthCode": img_auth_code.strip(),
+        "sms_type": sms_type
+    }
+
+    m = rand_str(24).upper()
+    payload["dec_key"] = rsa_encrypt(ENCRYPTION_PUBLIC_KEY_PEM, m)
+
+    encrypt_keys = ["login_name", "mobile", "imgUniCode", "imgAuthCode"]
+    for k in encrypt_keys:
+        if k in payload:
+            payload[k] = des3_ecb_pkcs7_encrypt(m, payload[k])
+
+    keys_for_sign = list(payload.keys())
+    values_for_sign = [str(v) for v in payload.values()]
+
+    values_concat = "".join(values_for_sign)
+    string_to_sign = values_concat + SIGN_KEY_NEW
+    payload["key"] = ",".join(keys_for_sign)
+    payload["sign"] = rsa_sha256_sign(SIGNING_PRIVATE_KEY_PEM, string_to_sign)
+
+    url = BASE_URL + "/unionApp/interf/front/SMS/SMS1"
+    print(f"\n[*] 正在请求 SMS/SMS1 发送短信验证码...")
+    resp = session.post(url, json=payload, verify=False)
+
+    try:
+        resp_json = resp.json()
+        if "data2" in resp_json:
+            decrypted_json_str = decrypt_data2(resp_json["data2"])
+            data_dict = json.loads(decrypted_json_str)
+            print("[+] SMS/SMS1 响应解密成功：")
+            print(json.dumps(data_dict, indent=2, ensure_ascii=False))
+            return data_dict
+        print("[-] SMS/SMS1 响应中没有 data2 字段:", resp.text)
+        return None
+    except Exception as e:
+        print(f"[-] SMS/SMS1 请求解密失败: {e}")
+        return None
+
+
+# ================= 6. 业务逻辑：短信验证码登录 (U065) =================
+def login_u065(phone, auth_code):
+    """
+    提交 U065 接口，使用短信验证码登录。
+    """
+    if not phone or not auth_code:
+        raise ValueError("手机号和短信验证码都必须填写。")
+
+    payload = {
+        "channel": CHANNEL,
+        "app_ver_no": APP_VER_NO,
+        "timestamp": str(int(time.time() * 1000)),
+        "term_sys_ver": "12",
+        "root": "0",
+        "term_sys": "2",
+        "model": "24031PN0DC",
+        "term_id": "42e85afdd7e346e5",
+        "login_name": phone,
+        "auth_code": auth_code.strip()
+    }
+
+    m = rand_str(24).upper()
+    payload["dec_key"] = rsa_encrypt(ENCRYPTION_PUBLIC_KEY_PEM, m)
+
+    encrypt_keys = ["login_name", "auth_code"]
+    for k in encrypt_keys:
+        if k in payload:
+            payload[k] = des3_ecb_pkcs7_encrypt(m, payload[k])
+
+    keys_for_sign = list(payload.keys())
+    values_for_sign = [str(v) for v in payload.values()]
+
+    values_concat = "".join(values_for_sign)
+    string_to_sign = values_concat + SIGN_KEY_NEW
+    payload["key"] = ",".join(keys_for_sign)
+    payload["sign"] = rsa_sha256_sign(SIGNING_PRIVATE_KEY_PEM, string_to_sign)
+
+    url = BASE_URL + "/unionApp/interf/front/U/U065"
+    print(f"\n[*] 正在提交 U065 短信验证码登录...")
+    resp = session.post(url, json=payload, verify=False)
+
+    try:
+        resp_json = resp.json()
+        if "data2" in resp_json:
+            decrypted_json_str = decrypt_data2(resp_json["data2"])
+            data_dict = json.loads(decrypted_json_str)
+            print("[+] U065 登录响应解密成功：")
+            print(json.dumps(data_dict, indent=2, ensure_ascii=False))
+            return data_dict
+        print("[-] U065 响应中没有 data2 字段:", resp.text)
+        return None
+    except Exception as e:
+        print(f"[-] U065 请求解密失败: {e}")
+        return None
+
+
+# ================= 7. 业务逻辑：执行登录 (U004) =================
 def decode_captcha_image(captcha_data):
     img_base64 = captcha_data.get("img", "")
     if not img_base64:
@@ -265,13 +382,42 @@ def login_u004(captcha_data, phone, password):
 
 
 if __name__ == "__main__":
-   # 配置您的真实账号密码进行测试
     TEST_PHONE = input("请输入登录手机号: ")
-    TEST_PWD = input("请输入登录密码: ")
-    
+
+    print("\n请选择登录方式:")
+    print("  1. 密码登录")
+    print("  2. 短信验证码登录")
+    login_mode = input("请选择 (1/2，默认 1): ").strip() or "1"
+
     print("\n--- 第一步：获取验证码 ---")
     captcha_data = get_captcha_u067()
-    
-    if captcha_data and captcha_data.get("result") == "0":
-        print("\n--- 第二步：提交登录 ---")
+
+    if not captcha_data or captcha_data.get("result") != "0":
+        print("[-] 获取验证码失败，程序退出。")
+        exit(1)
+
+    if login_mode == "2":
+        # 短信验证码登录
+        try:
+            with open("captcha.jpg", "wb") as f:
+                f.write(decode_captcha_image(captcha_data))
+            print("\n[*] 验证码图片已保存为当前目录下的 captcha.jpg")
+        except Exception as e:
+            print(f"[-] 保存验证码图片失败: {e}")
+            exit(1)
+
+        img_auth_code = input("[?] 请打开 captcha.jpg，输入图形验证码: ").strip()
+
+        print("\n--- 第二步：发送短信验证码 ---")
+        sms_result = send_sms(captcha_data, TEST_PHONE, img_auth_code)
+
+        if sms_result and sms_result.get("result") == "0":
+            print("\n--- 第三步：提交短信验证码登录 ---")
+            sms_code = input("[?] 请输入手机收到的短信验证码: ").strip()
+            login_result = login_u065(TEST_PHONE, sms_code)
+        else:
+            print(f"[-] 短信发送失败: {(sms_result and sms_result.get('msg')) or '未知错误'}")
+    else:
+        # 密码登录（原有逻辑）
+        TEST_PWD = input("请输入登录密码: ")
         login_result = login_u004(captcha_data, TEST_PHONE, TEST_PWD)

@@ -1,203 +1,277 @@
-# 杭工e家自动化脚本项目
+<div align="center">
+  <img src="https://socialify.git.ci/BAOfanTing/AutoTicket/image?description=1&font=Inter&forks=1&language=1&name=1&owner=1&pattern=Plus&stargazers=1&theme=Dark" alt="AutoTicket" />
+  <p>
+    <strong>杭工e家 APP 自动化脚本</strong>
+    <br />
+    支持签到 · 评论 · 积分查询 · 优惠券定时兑换
+  </p>
+  <p>
+    <a href="#-python-版本"><img src="https://img.shields.io/badge/Python-3.x-blue?logo=python" /></a>
+    <a href="#-javascript-版本"><img src="https://img.shields.io/badge/Node.js-14%2B-green?logo=nodedotjs" /></a>
+    <a href="#-微信小程序"><img src="https://img.shields.io/badge/WeChat-%E5%B0%8F%E7%A8%8B%E5%BA%8F-07c160?logo=wechat" /></a>
+    <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-yellow" /></a>
+  </p>
+</div>
 
-![项目图片](https://socialify.git.ci/BAOfanTing/AutoTicket/image?custom_description=%E6%9D%AD%E5%B7%A5e%E5%AE%B6app%E9%80%86%E5%90%91%E5%AD%A6%E4%B9%A0&description=1&font=Inter&forks=1&language=1&name=1&owner=1&pattern=Plus&stargazers=1&theme=Dark)
+---
 
-## 更新日志
+## 📋 目录
 
-### V1.0.7 2026.05.5
+- [项目简介](#-项目简介)
+- [功能特性](#-功能特性)
+- [版本对比](#-版本对比)
+- [快速开始](#-快速开始)
+  - [Python 版本](#python-版本)
+  - [JavaScript 版本](#javascript-版本)
+  - [微信小程序](#微信小程序)
+- [项目结构](#-项目结构)
+- [技术栈](#-技术栈)
+- [更新日志](#-更新日志)
+- [免责声明](#-免责声明)
 
-界面美化,增加登录接口,现在无需再模拟器抓取login_name与ses_id
-
-todo:打包手机apk更方便
-
-### V1.0.6 2026.02.13
-
-    python版本增加每日任务一键运行
-
-### V1.0.5 2026.02.03
-
-2.3测试抢票功能正常
-
-![image-20260203090527018](https://gitee.com/baofanting/image/raw/master/image/20260203090527104.png)
-
-### V1.0.5 2025.12.23
-
-实测0.05抢票间隔无法抢到,改为0.5或1可抢一张
+---
 
 ## 📖 项目简介
 
-这是一个用于杭工e家APP的自动化脚本项目，支持多种功能包括签到、评论、查询积分、兑换优惠券等。项目提供 **Python** 和 **JavaScript** 两个版本，具有完整的加密解密、错误处理、重试机制和钉钉通知功能。
+AutoTicket 是一个针对 **杭工e家 APP** 的自动化脚本集合。通过对 APP 接口的逆向分析，实现了**登录**、**每日签到**、**评论**、**积分查询**和**优惠券定时兑换**等功能的自动化。
 
-## 🚀 版本选择
+项目提供 **Python**（图形界面）、**JavaScript**（命令行）和**微信小程序**三种形态，满足不同使用场景。
 
-### 🐍 Python 版本
-
-- **特点**: 图形界面，操作简单，适合初学者
-- **优势**: 可视化配置，一键运行
-- **适用场景**: 个人使用，手动操作
-
-### ⚡ JavaScript 版本
-
-- **特点**: 命令行运行，性能更优，支持持续请求
-- **优势**: 执行速度快，资源占用少，支持自动化部署
-- **适用场景**: 服务器部署，定时任务，批量操作
-
-## 📁 项目结构
-
-```
-AutoTicket/
-├── README.md                    # 项目总览（本文件）
-├── AutoTicket.py               # Python版本主程序
-├── Decoder.py                  # Python版本解密模块
-├── gui.py                      # Python版本图形界面
-├── updater.py                  # Python版本更新器
-├── requirements.txt            # Python依赖
-├── JavaScript_Version/         # JavaScript版本目录
-│   ├── README.md              # JavaScript版本总览
-│   ├── README_快速开始.md      # JavaScript快速上手指南
-│   ├── README_项目总览.md      # JavaScript详细文档
-│   ├── README_技术架构.md      # JavaScript技术实现
-│   ├── AutoTicket.js          # JavaScript主程序
-│   ├── workflow_sigin.js      # 工作流脚本
-│   ├── decrypt.js             # 解密模块
-│   ├── encrypt_rsa.js         # 加密模块
-│   ├── workflow_config.js     # 配置文件
-│   └── dingtalk_config.js     # 钉钉配置
-└── image/                     # 项目截图
-```
+---
 
 ## 🎯 功能特性
 
-- ✅ **完整工作流**: 自动执行签到、评论、查询积分
-- ✅ **智能重试**: 自动重试失败请求，支持多种错误类型
-- ✅ **持续请求**: JavaScript版本支持持续请求直到成功
-- ✅ **加密安全**: 完整的RSA+DESede加密解密
-- ✅ **钉钉通知**: 实时推送执行结果
-- ✅ **性能监控**: 详细的执行时间和重试统计
-- ✅ **配置统一**: 集中管理所有配置参数
-- ✅ **错误处理**: 完善的错误处理和日志记录
+| 功能 | Python | JavaScript | 小程序 | 说明 |
+|------|--------|------------|--------|------|
+| ✅ 密码登录 | ✓ | ✗ | ✓ | 手机号 + 密码 + 图形验证码 |
+| ✅ 短信验证码登录 | ✓ | ✗ | ✓ | 手机号 + 短信验证码 |
+| ✅ 获取图形验证码 | ✓ | ✗ | ✓ | U067 接口 |
+| ✅ 每日签到 | ✓ | ✓ | ✓ | 自动 3 次签到 |
+| ✅ 发表评论 | ✓ | ✓ | ✓ | 自动评论 |
+| ✅ 积分查询 | ✓ | ✓ | ✓ | 查询当前积分 |
+| ✅ 定时兑换 | ✓ | ✓ | ✓ | 指定时间并发抢券 |
+| ✅ 图形界面 | ✓ | ✗ | ✓ | PyQt5 / 小程序 UI |
+| ✅ 钉钉通知 | ✗ | ✓ | ✗ | 执行结果推送 |
+| ✅ 自动更新 | ✓ | ✗ | ✗ | 检查 GitHub 新版本 |
+
+---
+
+## 🔄 版本对比
+
+| 特性 | Python 版 | JavaScript 版 | 微信小程序 |
+|------|-----------|---------------|------------|
+| **界面** | PyQt5 桌面 GUI | 命令行 | 移动端 UI |
+| **操作难度** | ⭐ 简单 | ⭐⭐⭐ 中等 | ⭐⭐ 较简单 |
+| **适用场景** | 个人电脑使用 | 服务器定时任务 | 手机端操作 |
+| **登录方式** | 密码 / 短信 | 手动填 token | 密码 / 短信 |
+| **定时兑换** | ✓ 支持 | ✓ 支持 | ✓ 支持 |
+| **依赖环境** | Python 3.x + PyQt5 | Node.js 14+ | 微信开发者工具 |
+
+---
 
 ## 🚀 快速开始
 
 ### Python 版本
 
-1. 下载并安装 [雷电模拟器](https://www.ldmnq.com/#page2)
-2. 安装杭工e家APP和MT管理器
-3. 获取 `login_name` 和 `ses_id`（详见下方获取方法）
-4. 运行 `AutoTicket.py`，填入信息即可使用
+支持密码登录和短信验证码登录两种方式。
 
-### JavaScript 版本
+#### 安装依赖
 
-1. 安装 Node.js (建议 v14+)
-2. 进入 `JavaScript_Version` 目录
-3. 运行 `npm install` 安装依赖
-4. 配置钉钉机器人和用户信息
-5. 运行 `node AutoTicket.js` 开始使用
+```bash
+pip install -r requirements.txt
+```
 
-**详细操作指南**：
+`requirements.txt` 内容：
+```
+requests
+pycryptodome
+pycryptodomex
+```
 
-- [Python版本操作指南](#python版本操作指南)
-- [JavaScript版本操作指南](#javascript版本操作指南)
+#### 方式一：下载 Release 可执行文件（推荐）
 
-## 📋 获取必要参数
+从 [GitHub Releases](https://github.com/BAOfanTing/AutoTicket/releases) 下载最新的 `AutoTicket.exe`，双击运行即可，无需安装 Python 环境。
 
-# 运行流程
+#### 方式二：源码运行
 
-打开模拟器按下边操作,得到自己的 `SES_ID`，`LOGIN_NAME_PLAINTEXT` ,下载软件打开填入,修改时间运行
+```bash
+pip install -r requirements.txt
+python gui.py
+```
 
-## 1 模拟器配置
+1. 点击 **登录** 按钮
+2. 选择 **密码登录** 或 **短信验证码登录**
+3. 输入手机号、图形验证码，完成登录
+4. 登录成功后自动回填 `login_name` 和 `ses_id`
+5. 设置兑换参数（抢票时间、运行次数、间隔）
+6. 点击 **启动** 等待定时执行
 
-下载雷电模拟器https://www.ldmnq.com/#page2 ,打开雷电模拟器设置--其他设置--开启root权限[image-20250909151940755](./image/68747470733a2f2f67697465652e636f6d2f62616f66616e74696e672f696d6167652f7261772f6d61737465722f696d6167652f32303235303930393135333130383135312e706e67.png)
+#### 方式三：命令行
 
-安装杭工e家app和Mt管理器
+```bash
+python Login.py
+```
 
-[![image-20250909151957442](./image/68747470733a2f2f67697465652e636f6d2f62616f66616e74696e672f696d6167652f7261772f6d61737465722f696d6167652f32303235303930393135333130383135322e706e67.png)](https://camo.githubusercontent.com/930d08e17be03b43be985247452f5cf6d6e71fee66a618e948a3dcf1d407dbbd/68747470733a2f2f67697465652e636f6d2f62616f66616e74696e672f696d6167652f7261772f6d61737465722f696d6167652f32303235303930393135333130383135322e706e67)
+1. 输入手机号，选择登录方式
+2. 密码登录：输入密码 + 图形验证码
+3. 短信登录：输入图形验证码 → 接收短信 → 输入验证码
+4. 自动完成登录流程
 
-## 2 `login_name`，`ses_id`获取
+#### 自行打包为 exe
 
-在模拟器上登录杭工e家,登录后点开积分优享,且界面加载
-
-[![image-20250909151841700](./image/68747470733a2f2f67697465652e636f6d2f62616f66616e74696e672f696d6167652f7261772f6d61737465722f696d6167652f32303235303930393135333130383135332e706e67.png)](https://camo.githubusercontent.com/74837c700b79a52cf3f8d9bccd46e02ca23513a557964d042a38864d48678702/68747470733a2f2f67697465652e636f6d2f62616f66616e74696e672f696d6167652f7261772f6d61737465722f696d6167652f32303235303930393135333130383135332e706e67)
-
-`mt管理器`打开路径 `/data/data/com.zjte.hanggongefamily/app_webview/Default/Local Storage/leveldb/`能够看到有个log文件,他就是我们需要的
-
-[![image-20250909152040902](./image/68747470733a2f2f67697465652e636f6d2f62616f66616e74696e672f696d6167652f7261772f6d61737465722f696d6167652f32303235303930393135333130383135352e706e67.png)](https://camo.githubusercontent.com/39917199296a465b067bdabfc5e4da17fd5b4adf85ee0dd722c22791358c42e1/68747470733a2f2f67697465652e636f6d2f62616f66616e74696e672f696d6167652f7261772f6d61737465722f696d6167652f32303235303930393135333130383135352e706e67)
-
-打开滑动到最下边,复制最后的 `login_name`，`ses_id`,填入程序
-
-[![image-20250909152355655](./image/68747470733a2f2f67697465652e636f6d2f62616f66616e74696e672f696d6167652f7261772f6d61737465722f696d6167652f32303235303930393135333130383135362e706e67.png)
-
-双击运行软件,填入信息,修改时间运行,出现手慢优惠券没了,说明正确. 修改为抢票时间点击启动等待即可
-
-[![image-20250909152433677](./image/68747470733a2f2f67697465652e636f6d2f62616f66616e74696e672f696d6167652f7261772f6d61737465722f696d6167652f32303235303930393135333130383135372e706e67.png)
-
-## 📚 详细文档
-
-### Python 版本
-
-- **主程序**: `AutoTicket.py` - 图形界面主程序
-- **解密模块**: `Decoder.py` - 响应数据解密
-- **图形界面**: `gui.py` - 用户界面
-- **更新器**: `updater.py` - 自动更新功能
-
-### JavaScript 版本
-
-- **[快速开始指南](./JavaScript_Version/README_快速开始.md)** - 5分钟快速上手指南
-- **[项目总览](./JavaScript_Version/README_项目总览.md)** - 完整项目文档和使用说明
-- **[技术架构](./JavaScript_Version/README_技术架构.md)** - 系统架构和技术实现
-
-## 🎨 界面展示
-
-### Python 版本界面
-
-![Python界面](https://gitee.com/baofanting/image/raw/master/image/20250909153108157.png)
-
-### JavaScript 版本运行效果
-
-### 钉钉通知效果
-
-- **签到推送**: ![签到通知](https://rexin-shimin.oss-cn-hangzhou.aliyuncs.com/images/image-20250922130045697.png)
-- **留言推送**: ![留言通知](https://rexin-shimin.oss-cn-hangzhou.aliyuncs.com/images/image-20250922130138257.png)
-- **兑换推送**: ![兑换通知](https://rexin-shimin.oss-cn-hangzhou.aliyuncs.com/images/image-20250922130347367.png)
-
-## ⚠️ 注意事项
-
-1. **登录状态**: 在手机登录杭工e家后，模拟器会退出登录，需要重新登录
-2. **参数更新**: 每次重新登录后需要重新获取 `ses_id`
-3. **使用频率**: 避免过于频繁的请求，遵守服务器限制
-4. **法律声明**: 本项目仅供学习和研究使用，请遵守相关法律法规
-
-## 🔧 技术栈
-
-### Python 版本
-
-- **Python 3.x**: 主要开发语言
-- **tkinter**: 图形界面
-- **requests**: HTTP请求
-- **cryptography**: 加密解密
-
-### JavaScript 版本
-
-- **Node.js**: 运行时环境
-- **crypto**: 加密解密模块
-- **node-rsa**: RSA加密库
-- **https**: HTTP请求模块
-
-## 📞 支持与反馈
-
-如有问题或建议，请：
-
-1. 查看对应版本的详细文档
-2. 检查配置参数是否正确
-3. 查看控制台错误日志
-4. 提交 Issue 反馈问题
-
-## 📄 许可证
-
-本项目基于 MIT 许可证开源。详见 [LICENSE](./LICENSE) 文件。
+```bash
+pip install pyinstaller
+pyinstaller AutoTicket.spec
+```
 
 ---
 
-**免责声明**: 本项目仅供学习和研究使用，请遵守相关法律法规和网站使用条款。如他人使用本仓库代码用于商业用途，侵犯到杭工e家等，本人不承担任何责任。
+### JavaScript 版本
 
-[![Star History Chart](https://api.star-history.com/svg?repos=BAOfanTing/AutoTicket&type=Date)](https://www.star-history.com/#BAOfanTing/AutoTicket&Date)
+适用于服务器部署和定时任务。
+
+```bash
+cd JavaScript_Version
+npm install
+```
+
+编辑 `workflow_config.js` 配置 `login_name` 和 `ses_id`，然后运行：
+
+```bash
+# 完整工作流（签到→评论→查询积分）
+node workflow_sigin.js
+
+# 持续兑换脚本
+node AutoTicket.js
+```
+
+钉钉通知配置请编辑 `dingtalk_config.js`。
+
+---
+
+### 微信小程序
+
+使用 HBuilderX 打开 `App_Version/app_version` 目录，运行到微信开发者工具即可。
+
+支持密码登录和短信验证码登录，登录完成后可执行每日任务（签到、评论、积分查询）。
+
+---
+
+## 📁 项目结构
+
+```
+AutoTicket/
+├── README.md                    # 本文档
+├── LICENSE                      # MIT 许可证
+│
+├── AutoTicket.py                # Python 主程序 - 定时兑换逻辑
+├── Login.py                     # Python 登录模块 - U067/U004/U065/SMS
+├── Decoder.py                   # Python 解密模块 - data2 解密
+├── gui.py                       # Python 图形界面（PyQt5）
+├── updater.py                   # Python 自动更新模块
+├── requirements.txt             # Python 依赖
+├── AutoTicket.spec              # PyInstaller 打包配置
+│
+├── JavaScript_Version/          # JS 命令行版本
+│   ├── README.md
+│   ├── AutoTicket.js            # 持续兑换脚本
+│   ├── workflow_sigin.js        # 每日工作流脚本
+│   ├── workflow_config.js       # 配置文件
+│   ├── dingtalk_config.js       # 钉钉通知配置
+│   ├── encrypt_rsa.js           # RSA + DESede 加密
+│   └── decrypt.js               # 响应解密
+│
+├── App_Version/                 # 微信小程序版本
+│   └── app_version/
+│       ├── pages/
+│       │   ├── login/login.vue  # 登录页面
+│       │   └── main/main.vue    # 主页面
+│       └── src/
+│           ├── services/
+│           │   ├── authService.js    # 登录相关 API
+│           │   ├── taskService.js    # 任务相关 API
+│           │   ├── cryptoService.js  # 加解密服务
+│           │   ├── constants.js      # 常量 & 端点
+│           │   └── http.js           # HTTP 请求封装
+│           └── utils/
+│               ├── storage.js        # 本地存储
+│               └── time.js           # 时间工具
+│
+├── image/                       # 文档图片
+├── icon.ico                     # 程序图标
+└── config.json                  # 本地配置文件（自动生成）
+```
+
+---
+
+## 🧱 技术栈
+
+### 加密体系
+
+所有版本共用同一套加密体系（通过逆向 APP 获取）：
+
+| 算法 | 用途 |
+|------|------|
+| RSA (PKCS1_v1_5) | 加密 3DES 会话密钥 |
+| 3DES (ECB/PKCS7) | 加密敏感字段（手机号、密码等） |
+| SHA256withRSA | 请求体签名 |
+| 3DES (CBC/PKCS7) | 解密响应 data2 |
+
+### Python 版
+
+- **Python 3.x** — 主开发语言
+- **PyQt5** — 图形界面框架
+- **requests** — HTTP 客户端
+- **pycryptodome / pycryptodomex** — 加密库
+
+### JavaScript 版
+
+- **Node.js 14+** — 运行环境
+- **node-rsa / crypto** — 加密库
+
+### 微信小程序
+
+- **Vue 3** — 前端框架
+- **uni-app** — 跨端框架
+- **crypto-js / jsencrypt / jsrsasign** — 加密库
+
+---
+
+## 📜 更新日志
+
+### v1.0.7 (2026-05-17)
+- 新增 **短信验证码登录**（Python GUI / CLI / 小程序）
+- 新增 `SMS/SMS1` 短信发送接口
+- 新增 `U/U065` 短信验证码登录接口
+- 登录页面增加密码 / 短信切换
+
+### v1.0.6 (2026-02-13)
+- Python 版本增加每日任务一键运行
+
+### v1.0.5 (2026-02-03)
+- 实测抢票功能正常
+- 优化请求间隔参数
+
+### v1.0.5 (2025-12-23)
+- 调整抢票间隔为 0.5~1 秒
+- 提高抢票成功率
+
+---
+
+## ⚠️ 免责声明
+
+1. **学习用途**：本项目仅供学习和研究 API 逆向技术使用
+2. **合规使用**：请遵守相关法律法规和杭工e家 APP 的使用条款
+3. **使用风险**：因使用本软件造成的任何直接或间接后果，开发者不承担责任
+4. **商业用途**：如他人将本项目用于商业用途或不当用途，由使用者自行承担责任
+5. **开源协议**：本项目基于 **MIT License** 开源
+
+---
+
+<div align="center">
+  <sub>Built with ❤️ by BAOfanTing</sub>
+  <br />
+  <a href="https://github.com/BAOfanTing/AutoTicket">GitHub</a>
+  ·
+  <a href="https://github.com/BAOfanTing/AutoTicket/issues">Issue</a>
+</div>

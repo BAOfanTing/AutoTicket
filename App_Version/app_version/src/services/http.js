@@ -19,7 +19,7 @@ export function postJson(path, data) {
       url: `${BASE_URL}${path}`,
       method: 'POST',
       header: sanitizeHeaders(REQUEST_HEADERS),
-      data,
+      data: typeof data === 'string' ? data : JSON.stringify(data),
       success: (res) => {
         if (res.statusCode >= 200 && res.statusCode < 300) {
           resolve(res.data)

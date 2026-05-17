@@ -6,6 +6,8 @@ export const APP_VER_NO = '3.1.7'
 export const ENDPOINTS = {
   captcha: '/unionApp/interf/front/U/U067',
   login: '/unionApp/interf/front/U/U004',
+  smsSend: '/unionApp/interf/front/SMS/SMS1',
+  smsLogin: '/unionApp/interf/front/U/U065',
   signin: '/unionApp/interf/front/U/U042',
   comment: '/unionApp/interf/front/AC/AC08',
   query: '/unionApp/interf/front/U/U005',

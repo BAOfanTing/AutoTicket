@@ -89,12 +89,11 @@ function base64ToFilePath(base64Data) {
     }
 
     const filePath = `${wx.env.USER_DATA_PATH}/captcha_${Date.now()}.${format}`;
-    const buffer = wx.base64ToArrayBuffer(body);
     const fsm = wx.getFileSystemManager();
     fsm.writeFile({
       filePath,
-      data: buffer,
-      encoding: 'binary',
+      data: body,
+      encoding: 'base64',
       success() { resolve(filePath); },
       fail(err) { reject(new Error('写入验证码图片失败: ' + (err.errMsg || JSON.stringify(err)))); }
     });
@@ -114,19 +113,94 @@ export async function decodeCaptchaImage(captchaData) {
     throw new Error('验证码图片数据无效')
   }
 
-  // 补上 data URL 前缀，传给 base64ToFilePath 统一处理
+  // 补上 data URL 前缀
   const dataUrl = `data:image/jpeg;base64,${pureBase64}`
 
-  // 写入临时文件
+  // 优先写入临时文件（性能更好）
   try {
     const rawPath = await base64ToFilePath(dataUrl)
-    const normalizedPath = normalizeLocalImagePath(rawPath)
-    console.log('[captcha] write success:', normalizedPath)
-    return normalizedPath
+    console.log('[captcha] write success:', rawPath)
+    return rawPath
   } catch (err) {
     console.error('[captcha] base64ToFilePath failed:', err.message)
-    // 终极 fallback：直接返回 data URL（部分环境可能不渲染，但至少能看到数据）
-    return dataUrl
+  }
+
+  // fallback：直接返回 data URL
+  return dataUrl
+}
+
+// 发送短信验证码（对应 Login.py:send_sms）
+export async function sendSms(captchaData, phone, imgAuthCode) {
+  if (!captchaData || !captchaData.imgUniCode) {
+    throw new Error('验证码标识 imgUniCode 缺失')
+  }
+  if (!phone || !imgAuthCode) {
+    throw new Error('手机号和图形验证码均不能为空')
+  }
+
+  console.log('[sendSms] 构建请求 payload...')
+  const payload = buildEncryptedPayload({
+    channel: CHANNEL,
+    app_ver_no: APP_VER_NO,
+    timestamp: nowTs(),
+    term_sys_ver: '12',
+    root: '0',
+    term_sys: '2',
+    model: '24031PN0DC',
+    login_name: phone,
+    mobile: phone,
+    imgUniCode: captchaData.imgUniCode,
+    imgAuthCode: imgAuthCode.trim(),
+    sms_type: '10'
+  })
+  console.log('[sendSms] payload key 顺序:', payload.key)
+  console.log('[sendSms] 请求 URL:', ENDPOINTS.smsSend)
+
+  const response = await postJson(ENDPOINTS.smsSend, payload)
+  console.log('[sendSms] 响应:', response ? (response.data2 ? '有 data2' : '无 data2') : '空响应')
+
+  if (!response || !response.data2) {
+    throw new Error('短信发送接口返回缺少 data2')
+  }
+
+  try {
+    const plain = decryptData2(response.data2)
+    console.log('[sendSms] 解密成功:', plain)
+    return JSON.parse(plain)
+  } catch (error) {
+    throw new Error(`短信发送响应解密失败: ${error.message || error}`)
+  }
+}
+
+// 短信验证码登录（对应 Login.py:login_u065）
+export async function loginU065(phone, authCode) {
+  if (!phone || !authCode) {
+    throw new Error('手机号和短信验证码均不能为空')
+  }
+
+  const payload = buildEncryptedPayload({
+    channel: CHANNEL,
+    app_ver_no: APP_VER_NO,
+    timestamp: nowTs(),
+    term_sys_ver: '12',
+    root: '0',
+    term_sys: '2',
+    model: '24031PN0DC',
+    term_id: '42e85afdd7e346e5',
+    login_name: phone,
+    auth_code: authCode.trim()
+  })
+
+  const response = await postJson(ENDPOINTS.smsLogin, payload)
+  if (!response || !response.data2) {
+    throw new Error('短信登录接口返回缺少 data2')
+  }
+
+  try {
+    const plain = decryptData2(response.data2)
+    return JSON.parse(plain)
+  } catch (error) {
+    throw new Error(`短信登录响应解密失败: ${error.message || error}`)
   }
 }
 
