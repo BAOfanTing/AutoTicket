@@ -5,7 +5,7 @@
     </view>
 
     <view class="card">
-      <view class="title">杭工e家</view>
+      <view class="title">e家登录</view>
 
       <!-- 登录方式切换 -->
       <view class="mode-tabs">

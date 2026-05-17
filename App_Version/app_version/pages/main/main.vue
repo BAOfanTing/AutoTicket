@@ -55,6 +55,7 @@
         <button class="btn" @click="runDailyTask" :disabled="running || dailyTaskRunning || !isLoggedIn">
           {{ dailyTaskRunning ? '执行中...' : '执行每日任务' }}
         </button>
+        <button class="btn btn-qr" @click="goQrCode" :disabled="!isLoggedIn">绿色出行码</button>
       </view>
     </view>
 
@@ -189,6 +190,10 @@ async function startProgram() {
   }
 }
 
+function goQrCode() {
+  uni.navigateTo({ url: '/pages/qrcode/qrcode' })
+}
+
 async function runDailyTask() {
   if (!form.loginName || !form.sesId) {
     uni.showToast({ title: 'LOGIN_NAME 和 SES_ID 必须填写', icon: 'none' })
@@ -227,7 +232,6 @@ onLoad(() => {
   form.sesId = auth.sesId
 
   form.exchangeId = config.exchangeId || form.exchangeId
-  form.runTime = config.runTime || form.runTime
   form.runCount = config.runCount || form.runCount
   form.timeSleep = config.timeSleep || form.timeSleep
 
@@ -341,6 +345,11 @@ watch(form, () => { persistConfig() }, { deep: true })
 .btn-danger {
   background: #fff5f4;
   color: #ff3b30;
+}
+
+.btn-qr {
+  background: #1f9d55;
+  color: #fff;
 }
 
 .log-box {

@@ -1,15 +1,18 @@
 import sys
 from PyQt5.QtWidgets import (QApplication, QWidget, QLabel, QLineEdit, QPushButton,
                              QTextEdit, QVBoxLayout, QHBoxLayout, QGroupBox, QFormLayout,
-                             QMessageBox, QDialog, QDialogButtonBox)
+                             QMessageBox, QDialog, QDialogButtonBox, QFrame)
 from PyQt5.QtCore import QThread, pyqtSignal, QDateTime, QTimer, Qt
-from PyQt5.QtGui import QIcon, QPixmap
+from PyQt5.QtGui import QIcon, QPixmap, QImage
 import AutoTicket
 import Login
 import time
 import json
 import os
 import updater
+import qrcode
+from PIL import Image
+import io
 # pyinstaller --onefile --windowed --icon=./icon.ico -n AutoTicket gui.py
 APP_STYLESHEET = """
 QWidget {
@@ -106,6 +109,25 @@ QPushButton#stopButton:hover {
 }
 QPushButton#stopButton:pressed {
     background: #ffe1df;
+}
+QPushButton#qrButton {
+    background: #1f9d55;
+    border: 1px solid #1f9d55;
+    color: #ffffff;
+    font-weight: 600;
+}
+QPushButton#qrButton:hover {
+    background: #28a85e;
+    border-color: #28a85e;
+}
+QPushButton#qrButton:pressed {
+    background: #198a49;
+    border-color: #198a49;
+}
+QPushButton#qrButton:disabled {
+    background: #b8e0c5;
+    border-color: #b8e0c5;
+    color: #ffffff;
 }
 """
 
@@ -283,6 +305,65 @@ class LoginDialog(QDialog):
             "captcha": self.captcha_edit.text().strip(),
             "sms_code": self.sms_code_edit.text().strip(),
         }
+
+
+class QRCodeDialog(QDialog):
+    def __init__(self, qrcode_hex, money, card_no, deadline, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("绿色出行码")
+        self.setModal(True)
+        self.setMinimumWidth(380)
+        self.setMinimumHeight(520)
+
+        layout = QVBoxLayout()
+        layout.setAlignment(Qt.AlignCenter)
+
+        qr_img = qrcode.make(qrcode_hex)
+        qr_img = qr_img.convert("RGBA")
+        data = qr_img.tobytes("raw", "RGBA")
+        qimage = QImage(data, qr_img.width, qr_img.height, QImage.Format_RGBA8888)
+        pixmap = QPixmap.fromImage(qimage)
+
+        qr_label = QLabel()
+        qr_label.setPixmap(pixmap.scaled(280, 280, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        qr_label.setAlignment(Qt.AlignCenter)
+        qr_label.setStyleSheet("padding: 16px;")
+
+        info_frame = QFrame()
+        info_frame.setStyleSheet("QFrame { background: #f5f5f7; border-radius: 12px; padding: 12px; }")
+        info_layout = QVBoxLayout(info_frame)
+        info_layout.setSpacing(8)
+
+        money_label = QLabel(f"余额: {money} 元")
+        money_label.setStyleSheet("font-size: 28px; font-weight: 700; color: #1d1d1f;")
+        money_label.setAlignment(Qt.AlignCenter)
+
+        card_label = QLabel(f"交通卡号: {card_no}") if card_no else QLabel("")
+        card_label.setAlignment(Qt.AlignCenter)
+        card_label.setStyleSheet("font-size: 14px; color: #6e6e73;")
+
+        deadline_label = QLabel(
+            f"有效期至: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(int(deadline)))}"
+        ) if deadline else QLabel("")
+        deadline_label.setAlignment(Qt.AlignCenter)
+        deadline_label.setStyleSheet("font-size: 14px; color: #6e6e73;")
+
+        info_layout.addWidget(money_label)
+        info_layout.addWidget(card_label)
+        info_layout.addWidget(deadline_label)
+
+        close_btn = QPushButton("关闭")
+        close_btn.setMinimumHeight(44)
+        close_btn.setStyleSheet(
+            "QPushButton { background: #007aff; color: #fff; border: none; border-radius: 10px; font-weight: 600; font-size: 16px; }"
+            "QPushButton:hover { background: #0a84ff; }"
+        )
+        close_btn.clicked.connect(self.accept)
+
+        layout.addWidget(qr_label)
+        layout.addWidget(info_frame)
+        layout.addWidget(close_btn)
+        self.setLayout(layout)
 
 
 class Worker(QThread):
@@ -467,18 +548,21 @@ class MainWindow(QWidget):
         self.start_button = QPushButton("启动")
         self.stop_button = QPushButton("停止")
         self.daily_task_button = QPushButton("执行每日任务")
+        self.qr_code_button = QPushButton("绿色出行码")
         self.about_button = QPushButton("说明")
         self.github_button = QPushButton("GitHub")
         self.start_button.setObjectName("primaryButton")
         self.stop_button.setObjectName("stopButton")
+        self.qr_code_button.setObjectName("qrButton")
         self.stop_button.setEnabled(False)
 
-        for button in [self.start_button, self.stop_button, self.daily_task_button, self.about_button, self.github_button]:
+        for button in [self.start_button, self.stop_button, self.daily_task_button, self.qr_code_button, self.about_button, self.github_button]:
             button.setMinimumHeight(48)
 
         button_layout.addWidget(self.start_button)
         button_layout.addWidget(self.stop_button)
         button_layout.addWidget(self.daily_task_button)
+        button_layout.addWidget(self.qr_code_button)
         button_layout.addWidget(self.about_button)
         button_layout.addWidget(self.github_button)
 
@@ -510,6 +594,7 @@ class MainWindow(QWidget):
         self.start_button.clicked.connect(self.start_program)
         self.stop_button.clicked.connect(self.stop_program)
         self.daily_task_button.clicked.connect(self.execute_daily_task)
+        self.qr_code_button.clicked.connect(self.show_qr_code)
         self.about_button.clicked.connect(self.show_about)
         self.github_button.clicked.connect(self.open_github)
 
@@ -534,11 +619,13 @@ class MainWindow(QWidget):
             self.login_status_label.setStyleSheet("color: #1f9d55; font-weight: 700;")
             self.logout_button.setEnabled(True)
             self.start_button.setEnabled(True)
+            self.qr_code_button.setEnabled(True)
         else:
             self.login_status_label.setText("未登录")
             self.login_status_label.setStyleSheet("color: #d93025; font-weight: 700;")
             self.logout_button.setEnabled(False)
             self.start_button.setEnabled(False)
+            self.qr_code_button.setEnabled(False)
 
     def login(self):
         try:
@@ -623,6 +710,53 @@ class MainWindow(QWidget):
         self.refresh_login_state()
         self.update_log("已退出登录")
         QMessageBox.information(self, "退出登录", "已清除本地登录状态。")
+
+    def show_qr_code(self):
+        try:
+            login_name = self.login_name_edit.text().strip()
+            ses_id = self.ses_id_edit.text().strip()
+            if not login_name or not ses_id:
+                QMessageBox.warning(self, "错误", "请先登录获取 login_name 和 ses_id")
+                return
+
+            self.update_log("正在获取绿色出行码 token...")
+            token = Login.get_qr_token(login_name, ses_id)
+            if not token:
+                QMessageBox.warning(self, "获取失败", "获取 token 失败，请检查登录状态")
+                self.update_log("获取 token 失败")
+                return
+            self.update_log(f"token 获取成功: {token[:20]}...")
+
+            self.update_log("正在获取乘车码数据...")
+            result = Login.get_qr_code(token)
+            if not result or result.get("respCode") != "00":
+                QMessageBox.warning(self, "获取失败", "获取乘车码数据失败")
+                self.update_log("获取乘车码数据失败")
+                return
+
+            data = result.get("data", {})
+            qrcode_hex = data.get("qrcode", "")
+            money = data.get("money", "0")
+            card_no = data.get("trafficCardNo", "")
+            deadline = data.get("deadTime", "")
+
+            if not qrcode_hex:
+                QMessageBox.warning(self, "数据错误", "乘车码数据为空")
+                return
+
+            dialog = QRCodeDialog(qrcode_hex, money, card_no, deadline, self)
+            dialog.exec_()
+            self.update_log("绿色出行码展示完成")
+
+            # 后台记录访问量 (OP80)
+            try:
+                Login.record_qr_visit(login_name)
+            except:
+                pass
+
+        except Exception as e:
+            QMessageBox.warning(self, "错误", str(e))
+            self.update_log(f"绿色出行码出错: {str(e)}")
 
     def start_program(self):
         login_name = self.login_name_edit.text()

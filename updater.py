@@ -6,7 +6,7 @@ import sys
 import os
 
 # 当前版本号
-CURRENT_VERSION = "1.0.7"
+CURRENT_VERSION = "1.0.8"
 
 class UpdateChecker(QThread):
     #定义信号,用于向主线程发送检查结果

@@ -11,6 +11,12 @@
       "style": {
         "navigationBarTitleText": "AutoTicket"
       }
+    },
+    {
+      "path": "pages/qrcode/qrcode",
+      "style": {
+        "navigationBarTitleText": "绿色出行码"
+      }
     }
   ],
   "globalStyle": {

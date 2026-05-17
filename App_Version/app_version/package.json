@@ -10,13 +10,14 @@
     "crypto-js": "^4.2.0",
     "jsencrypt": "^3.5.4",
     "jsrsasign": "^11.1.0",
+    "uqrcodejs": "^4.0.7",
     "vue": "^3.5.34"
   },
   "devDependencies": {
     "@dcloudio/types": "^3.4.8",
     "@dcloudio/uni-automator": "3.0.0-5000720260410001",
     "@dcloudio/vite-plugin-uni": "3.0.0-5000720260410001",
-    "vite": "5.2.8",
-    "lodash": "^4.18.1"
+    "lodash": "^4.18.1",
+    "vite": "5.2.8"
   }
 }

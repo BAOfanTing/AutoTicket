@@ -8,6 +8,8 @@ export const ENDPOINTS = {
   login: '/unionApp/interf/front/U/U004',
   smsSend: '/unionApp/interf/front/SMS/SMS1',
   smsLogin: '/unionApp/interf/front/U/U065',
+  qrToken: '/unionApp/interf/front/OL/OL82',
+  qrVisit: '/unionApp/interf/front/OP/OP80',
   signin: '/unionApp/interf/front/U/U042',
   comment: '/unionApp/interf/front/AC/AC08',
   query: '/unionApp/interf/front/U/U005',

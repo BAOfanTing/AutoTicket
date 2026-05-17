@@ -11,7 +11,9 @@
       "Bash(npm ls *)",
       "Bash(npm config *)",
       "Bash(npx vite *)",
-      "Bash(npm ci *)"
+      "Bash(npm ci *)",
+      "Bash(pip list *)",
+      "Bash(pip install *)"
     ]
   }
 }

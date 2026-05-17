@@ -291,7 +291,182 @@ def login_u065(phone, auth_code):
         return None
 
 
-# ================= 7. 业务逻辑：执行登录 (U004) =================
+# ================= 7. 业务逻辑：绿色出行码 (OL82 / OP80 / QR) =================
+def get_qr_token(user_id_plain, ses_id):
+    """
+    请求 OL82 接口，获取市民卡交通码 token。
+    user_id_plain: 明文 user_id（登录响应中获取）
+    ses_id: 明文 ses_id（登录响应中获取）
+    返回: token 字符串（如 "HZCODEGONGHUI..."）
+    """
+    if not user_id_plain or not ses_id:
+        raise ValueError("user_id 和 ses_id 都必须填写。")
+
+    payload = {
+        "channel": CHANNEL,
+        "app_ver_no": APP_VER_NO,
+        "timestamp": str(int(time.time() * 1000)),
+        "user_id": user_id_plain,
+        "ses_id": ses_id
+    }
+
+    m = rand_str(24).upper()
+    payload["dec_key"] = rsa_encrypt(ENCRYPTION_PUBLIC_KEY_PEM, m)
+
+    encrypt_keys = ["user_id"]
+    for k in encrypt_keys:
+        if k in payload:
+            payload[k] = des3_ecb_pkcs7_encrypt(m, payload[k])
+
+    keys_for_sign = list(payload.keys())
+    values_for_sign = [str(v) for v in payload.values()]
+
+    values_concat = "".join(values_for_sign)
+    string_to_sign = values_concat + SIGN_KEY_NEW
+    payload["key"] = ",".join(keys_for_sign)
+    payload["sign"] = rsa_sha256_sign(SIGNING_PRIVATE_KEY_PEM, string_to_sign)
+
+    url = BASE_URL + "/unionApp/interf/front/OL/OL82"
+    print(f"\n[*] 正在请求 OL82 获取绿色出行码 token...")
+    resp = session.post(url, json=payload, verify=False)
+
+    try:
+        resp_json = resp.json()
+        if "data2" in resp_json:
+            decrypted_json_str = decrypt_data2(resp_json["data2"])
+            data_dict = json.loads(decrypted_json_str)
+            print("[+] OL82 响应解密成功：")
+            print(json.dumps(data_dict, indent=2, ensure_ascii=False))
+            if data_dict.get("result") == "0" and "data" in data_dict:
+                return data_dict["data"].get("token", "")
+            return None
+        print("[-] OL82 响应中没有 data2 字段:", resp.text)
+        return None
+    except Exception as e:
+        print(f"[-] OL82 请求解密失败: {e}")
+        return None
+
+
+def record_qr_visit(user_id_plain):
+    """
+    请求 OP80 接口，记录用户量增加（绿色出行码入口点击统计）。
+    返回: bool
+    """
+    if not user_id_plain:
+        raise ValueError("user_id 不能为空。")
+
+    payload = {
+        "channel": CHANNEL,
+        "app_ver_no": APP_VER_NO,
+        "timestamp": str(int(time.time() * 1000)),
+        "user_id": user_id_plain,
+        "icon_id": "92",
+        "type": "2"
+    }
+
+    m = rand_str(24).upper()
+    payload["dec_key"] = rsa_encrypt(ENCRYPTION_PUBLIC_KEY_PEM, m)
+
+    encrypt_keys = ["user_id"]
+    for k in encrypt_keys:
+        if k in payload:
+            payload[k] = des3_ecb_pkcs7_encrypt(m, payload[k])
+
+    keys_for_sign = list(payload.keys())
+    values_for_sign = [str(v) for v in payload.values()]
+
+    values_concat = "".join(values_for_sign)
+    string_to_sign = values_concat + SIGN_KEY_NEW
+    payload["key"] = ",".join(keys_for_sign)
+    payload["sign"] = rsa_sha256_sign(SIGNING_PRIVATE_KEY_PEM, string_to_sign)
+
+    url = BASE_URL + "/unionApp/interf/front/OP/OP80"
+    print(f"\n[*] 正在请求 OP80 记录访问...")
+    resp = session.post(url, json=payload, verify=False)
+
+    try:
+        resp_json = resp.json()
+        print(f"[+] OP80 响应: {resp_json}")
+        return resp_json.get("result") == "0"
+    except Exception as e:
+        print(f"[-] OP80 请求失败: {e}")
+        return False
+
+
+def get_qr_code(token):
+    """
+    使用 OL82 获取的 token，调用第三方接口获取乘车码二维码数据。
+
+    返回: dict 包含 qrcode / deadTime / money / trafficCardStatus 等
+    """
+    if not token:
+        raise ValueError("token 不能为空。")
+
+    ts = str(int(time.time() * 1000))
+    global_seq = "2500" + ''.join(random.choices('0123456789abcdef', k=14))
+
+    payload = {
+        "latitude": None,
+        "longitude": None,
+        "version": "1.0.0",
+        "isImage": "0",
+        "timestamp": ts,
+        "globalSeq": global_seq
+    }
+
+    url = "https://hzcode.96225.com/hzcitizencodeengine/codeEngine/apply"
+    headers = {
+        "Host": "hzcode.96225.com",
+        "Connection": "keep-alive",
+        "Accept": "application/json, text/plain, */*",
+        "User-Agent": "Mozilla/5.0 (Linux; Android 12; 23113RKC6C Build/V417IR; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/110.0.5481.154 Mobile Safari/537.36;unionApp;HZGH",
+        "Content-Type": "application/json;charset=UTF-8",
+        "Origin": "https://hzcode.96225.com",
+        "X-Requested-With": "com.zjte.hanggongefamily",
+        "Referer": "https://hzcode.96225.com/hzcitizencodeh5/",
+        "token": token
+    }
+
+    print(f"\n[*] 正在请求乘车码接口...")
+    resp = requests.post(url, json=payload, headers=headers, verify=False)
+
+    try:
+        resp_json = resp.json()
+        print("[+] 乘车码响应:")
+        print(json.dumps(resp_json, indent=2, ensure_ascii=False))
+        return resp_json
+    except Exception as e:
+        print(f"[-] 乘车码请求失败: {e}")
+        return None
+
+
+def qr_code_workflow(user_id_plain, ses_id):
+    """
+    完整绿色出行码流程：OL82 获取 token → OP80 记录 → 获取乘车码
+    """
+    print("\n" + "="*50)
+    print("  绿色出行码流程")
+    print("="*50)
+
+    # 1. 获取 token
+    print("\n--- 第一步：获取 token (OL82) ---")
+    token = get_qr_token(user_id_plain, ses_id)
+    if not token:
+        print("[-] 获取 token 失败")
+        return None
+    print(f"[+] token: {token}")
+
+    # 2. 记录访问 (OP80)
+    print("\n--- 第二步：记录访问 (OP80) ---")
+    record_qr_visit(user_id_plain)
+
+    # 3. 获取乘车码
+    print("\n--- 第三步：获取乘车码 ---")
+    result = get_qr_code(token)
+    return result
+
+
+# ================= 8. 业务逻辑：执行登录 (U004) =================
 def decode_captcha_image(captcha_data):
     img_base64 = captcha_data.get("img", "")
     if not img_base64:
@@ -421,3 +596,13 @@ if __name__ == "__main__":
         # 密码登录（原有逻辑）
         TEST_PWD = input("请输入登录密码: ")
         login_result = login_u004(captcha_data, TEST_PHONE, TEST_PWD)
+
+    # 登录成功后，可选测试绿色出行码
+    if login_result and login_result.get("result") == "0":
+        user_id = login_result.get("user_id") or login_result.get("login_name") or ""
+        ses_id = login_result.get("ses_id") or ""
+        if user_id and ses_id:
+            print(f"\n[+] 登录成功！user_id={user_id}, ses_id={ses_id}")
+            choice = input("\n是否测试绿色出行码？(y/n，默认 n): ").strip().lower()
+            if choice == "y":
+                qr_code_workflow(user_id, ses_id)
