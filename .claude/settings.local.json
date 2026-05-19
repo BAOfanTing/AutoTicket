@@ -13,7 +13,9 @@
       "Bash(npx vite *)",
       "Bash(npm ci *)",
       "Bash(pip list *)",
-      "Bash(pip install *)"
+      "Bash(pip install *)",
+      "Bash(dir C:\\\\Users\\\\BAOfanTing\\\\OneDrive\\\\Desktop\\\\cache\\\\Autoticket\\\\AutoTicket\\\\App_Version\\\\app_version\\\\node_modules\\\\uqrcodejs *)",
+      "Bash(python3 *)"
     ]
   }
 }

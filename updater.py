@@ -1,3 +1,8 @@
+"""
+updater.py - 自动更新检查模块
+提供版本比较和后台更新检查功能，通过信号机制与 GUI 主线程通信。
+"""
+
 import requests
 import json
 import time
@@ -9,11 +14,18 @@ import os
 CURRENT_VERSION = "1.0.8"
 
 class UpdateChecker(QThread):
-    #定义信号,用于向主线程发送检查结果
-    # (是否有更新,最新版本号,下载链接,更新信息)
+    """
+    更新检查线程，在后台请求服务器版信息，通过信号通知主线程检查结果。
+    信号 sig_update 参数：(是否有更新, 最新版本号, 下载链接, 消息)
+    """
     sig_update = pyqtSignal(bool, str, str, str)
-    
+
     def __init__(self, server_url):
+        """初始化更新检查线程
+
+        参数:
+            server_url (str): 服务器上存放版本信息的 JSON 文件地址
+        """
         super().__init__()
         self.server_url = server_url
 
@@ -51,16 +63,20 @@ class UpdateChecker(QThread):
             print(f"JSON解析失败: {e}")
             self.sig_update.emit(False, "", "", f"JSON解析失败: {str(e)}")
         except Exception as e:
-            # 其他未知错误
+            # 其他未知错误兜底
             print(f"检查更新时发生未知错误: {e}")
             self.sig_update.emit(False, "", "", f"检查更新时发生未知错误: {str(e)}")
 
     def is_newer_version(self, latest_version, current_version):
         """
-        比较版本号,判断是否有更新
-        :param latest_version: 最新版本号
-        :param current_version: 当前版本号
-        :return: 如果有更新,返回True;否则返回False
+        比较版本号，判断是否有更新。
+
+        参数:
+            latest_version (str): 服务器上的最新版本号，如 "1.0.9"
+            current_version (str): 当前本地版本号
+
+        返回:
+            bool: 有更新返回 True，否则返回 False
         """
         try:
             # 处理版本号段数不一致的情况

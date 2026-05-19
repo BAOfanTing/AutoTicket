@@ -1,7 +1,9 @@
 import { BASE_URL, REQUEST_HEADERS } from './constants'
 
+// 不允许手动设置的请求头（uni-app 运行环境自动管理这些字段）
 const UNSAFE_HEADERS = new Set(['user-agent', 'host', 'connection', 'content-length'])
 
+// 过滤掉会被 uni-app 运行时自动覆盖的请求头
 function sanitizeHeaders(headers = {}) {
   const safe = {}
   Object.keys(headers).forEach((key) => {

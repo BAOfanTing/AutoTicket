@@ -1,3 +1,8 @@
+"""
+gui.py - AutoTicket 图形界面主模块
+基于 PyQt5 实现，提供登录、配置、定时兑换、每日任务、绿色出行码等功能操作界面。
+"""
+
 import sys
 from PyQt5.QtWidgets import (QApplication, QWidget, QLabel, QLineEdit, QPushButton,
                              QTextEdit, QVBoxLayout, QHBoxLayout, QGroupBox, QFormLayout,
@@ -13,7 +18,10 @@ import updater
 import qrcode
 from PIL import Image
 import io
+import base64
 # pyinstaller --onefile --windowed --icon=./icon.ico -n AutoTicket gui.py
+
+# 全局样式表：Apple 风格 UI，定义各控件颜色、圆角、字体等外观
 APP_STYLESHEET = """
 QWidget {
     color: #1d1d1f;
@@ -132,6 +140,8 @@ QPushButton#qrButton:disabled {
 """
 
 class LoginDialog(QDialog):
+    """登录对话框，支持密码登录和短信验证码登录两种模式"""
+
     def __init__(self, captcha_data, parent=None):
         super().__init__(parent)
         self.setWindowTitle("账号登录")
@@ -228,6 +238,7 @@ class LoginDialog(QDialog):
         self._switch_mode("password")
 
     def _switch_mode(self, mode):
+        """切换密码登录/短信验证码登录模式，控制对应输入行的显隐"""
         self.login_mode = mode
         self.btn_password_mode.setChecked(mode == "password")
         self.btn_sms_mode.setChecked(mode == "sms")
@@ -258,7 +269,7 @@ class LoginDialog(QDialog):
                 break
 
     def _on_send_sms(self):
-        phone = self.phone_edit.text().strip()
+        """点击"获取验证码"按钮：校验输入、调用 SMS 接口、启动倒计时"""
         captcha = self.captcha_edit.text().strip()
         if not phone:
             QMessageBox.warning(self, "输入错误", "请先输入手机号")
@@ -289,7 +300,7 @@ class LoginDialog(QDialog):
             self.btn_send_sms.setText("获取验证码")
 
     def _on_sms_timer(self):
-        self.sms_countdown_sec -= 1
+        """短信验证码倒计时更新，每秒触发一次，倒计时结束后恢复按钮"""
         if self.sms_countdown_sec <= 0:
             self.sms_timer.stop()
             self.btn_send_sms.setEnabled(True)
@@ -298,6 +309,7 @@ class LoginDialog(QDialog):
             self.btn_send_sms.setText(f"重新发送({self.sms_countdown_sec}s)")
 
     def get_login_input(self):
+        """获取对话框中的用户输入：登录模式、手机号、密码、验证码、短信验证码"""
         return {
             "mode": self.login_mode,
             "phone": self.phone_edit.text().strip(),
@@ -308,7 +320,9 @@ class LoginDialog(QDialog):
 
 
 class QRCodeDialog(QDialog):
-    def __init__(self, qrcode_hex, money, card_no, deadline, parent=None):
+    """绿色出行码展示对话框，显示服务端渲染的二维码图片及余额、卡号、有效期信息"""
+
+    def __init__(self, qrcode_image, money, card_no, deadline, parent=None):
         super().__init__(parent)
         self.setWindowTitle("绿色出行码")
         self.setModal(True)
@@ -318,11 +332,12 @@ class QRCodeDialog(QDialog):
         layout = QVBoxLayout()
         layout.setAlignment(Qt.AlignCenter)
 
-        qr_img = qrcode.make(qrcode_hex)
-        qr_img = qr_img.convert("RGBA")
-        data = qr_img.tobytes("raw", "RGBA")
-        qimage = QImage(data, qr_img.width, qr_img.height, QImage.Format_RGBA8888)
-        pixmap = QPixmap.fromImage(qimage)
+        # 解码服务端返回的 base64 图片
+        if qrcode_image.startswith('data:image'):
+            qrcode_image = qrcode_image.split(',', 1)[1]
+        img_bytes = base64.b64decode(qrcode_image)
+        pixmap = QPixmap()
+        pixmap.loadFromData(img_bytes)
 
         qr_label = QLabel()
         qr_label.setPixmap(pixmap.scaled(280, 280, Qt.KeepAspectRatio, Qt.SmoothTransformation))
@@ -367,6 +382,8 @@ class QRCodeDialog(QDialog):
 
 
 class Worker(QThread):
+    """定时兑换任务工作线程：等待指定时间后启动兑换循环"""
+
     log_signal = pyqtSignal(str)
     finished_signal = pyqtSignal()
 
@@ -382,6 +399,7 @@ class Worker(QThread):
         self.running = True
 
     def run(self):
+        """线程入口：设置全局参数 → 等待目标时间 → 执行兑换任务"""
         try:
             from datetime import datetime
 
@@ -408,6 +426,7 @@ class Worker(QThread):
             self.finished_signal.emit()
 
     def wait_until_target(self, run_time):
+        """等待直到目标时间，按距离远近动态调整休眠粒度（最远 5 分钟，最近 50 毫秒）"""
         from datetime import datetime
 
         while self.running:
@@ -430,9 +449,11 @@ class Worker(QThread):
             time.sleep(max(sleep_time, 0.01))
 
     def stop(self):
-        self.running = False
+        """请求线程停止（设置 running 标志为 False，wait_until_target 将退出循环）"""
 
 class DailyTaskWorker(QThread):
+    """每日任务工作线程：封装签到、评论、查询积分等日常操作"""
+
     log_signal = pyqtSignal(str)
     finished_signal = pyqtSignal()
 
@@ -444,6 +465,7 @@ class DailyTaskWorker(QThread):
         self.exchange_id = exchange_id
 
     def run(self):
+        """线程入口：设置全局参数并执行每日任务工作流"""
         try:
             AutoTicket.LOGIN_NAME_PLAINTEXT = self.login_name
             AutoTicket.USER_ID_PLAINTEXT = self.user_id
@@ -458,6 +480,8 @@ class DailyTaskWorker(QThread):
             self.finished_signal.emit()
 
 class MainWindow(QWidget):
+    """主窗口，包含登录、配置参数、启动/停止任务、日志展示及绿色出行码等功能"""
+
     def __init__(self):
         super().__init__()
         self.worker = None
@@ -470,10 +494,11 @@ class MainWindow(QWidget):
         self.init_ui()
         self.load_config()
 
-        # 检查更新
+        # 启动时检查版本更新
         self.check_update()
 
     def init_ui(self):
+        """初始化界面：创建登录区域、配置参数区域、按钮区域和日志展示区域"""
         self.setObjectName("mainWindow")
         self.setWindowTitle(f'AutoTicket {updater.CURRENT_VERSION} - 免费开源使用')
         self.setWindowIcon(QIcon(os.path.join(os.path.dirname(__file__), "icon.ico")))
@@ -608,12 +633,15 @@ class MainWindow(QWidget):
         self.refresh_login_state()
 
     def get_current_user_id(self, login_name):
+        """获取当前有效的 user_id，优先使用已登录的 user_id，否则回退到 login_name"""
         return self.user_id or login_name
 
     def has_valid_login(self):
+        """判断当前是否处于有效登录状态（已登录且表单中有 login_name 和 ses_id）"""
         return self.is_logged_in and bool(self.login_name_edit.text().strip()) and bool(self.ses_id_edit.text().strip())
 
     def refresh_login_state(self):
+        """根据登录状态更新界面 UI：按钮启用/禁用、状态标签文字和颜色"""
         if self.has_valid_login():
             self.login_status_label.setText("已登录")
             self.login_status_label.setStyleSheet("color: #1f9d55; font-weight: 700;")
@@ -628,6 +656,7 @@ class MainWindow(QWidget):
             self.qr_code_button.setEnabled(False)
 
     def login(self):
+        """弹出登录对话框，完成验证码获取→用户输入→登录提交→自动回填信息的完整流程"""
         try:
             self.update_log("正在获取验证码...")
             captcha_data = Login.get_captcha_u067()
@@ -695,6 +724,7 @@ class MainWindow(QWidget):
             self.update_log(f"登录失败: {str(e)}")
 
     def logout(self):
+        """退出登录：清空表单中的登录信息并重置状态"""
         if self.worker or self.daily_task_worker:
             QMessageBox.warning(self, "无法退出登录", "请先停止当前任务后再退出登录。")
             return
@@ -712,6 +742,7 @@ class MainWindow(QWidget):
         QMessageBox.information(self, "退出登录", "已清除本地登录状态。")
 
     def show_qr_code(self):
+        """获取并展示绿色出行码（token → 乘车码 → QR 码弹窗），同时在后台记录访问量"""
         try:
             login_name = self.login_name_edit.text().strip()
             ses_id = self.ses_id_edit.text().strip()
@@ -735,16 +766,16 @@ class MainWindow(QWidget):
                 return
 
             data = result.get("data", {})
-            qrcode_hex = data.get("qrcode", "")
+            qrcode_image = data.get("qrcodeImage", "")
             money = data.get("money", "0")
             card_no = data.get("trafficCardNo", "")
             deadline = data.get("deadTime", "")
 
-            if not qrcode_hex:
-                QMessageBox.warning(self, "数据错误", "乘车码数据为空")
+            if not qrcode_image:
+                QMessageBox.warning(self, "数据错误", "服务端未返回图片，请确认接口参数")
                 return
 
-            dialog = QRCodeDialog(qrcode_hex, money, card_no, deadline, self)
+            dialog = QRCodeDialog(qrcode_image, money, card_no, deadline, self)
             dialog.exec_()
             self.update_log("绿色出行码展示完成")
 
@@ -759,6 +790,7 @@ class MainWindow(QWidget):
             self.update_log(f"绿色出行码出错: {str(e)}")
 
     def start_program(self):
+        """启动定时兑换任务：校验输入后创建工作线程 Worker 并启动"""
         login_name = self.login_name_edit.text()
         ses_id = self.ses_id_edit.text()
         exchange_id = self.exchange_id_edit.text()
@@ -792,6 +824,7 @@ class MainWindow(QWidget):
         self.update_log("程序启动中...")
         
     def stop_program(self):
+        """停止正在运行的兑换任务"""
         if self.worker:
             self.stop_requested = True
             self.worker.stop()
@@ -801,7 +834,7 @@ class MainWindow(QWidget):
         self.update_log("程序已停止")
         
     def execute_daily_task(self):
-        """执行每日任务：登录→3次签到→评论→查询积分"""
+        """执行每日任务完整工作流：登录→3次签到→评论→查询积分"""
         login_name = self.login_name_edit.text()
         ses_id = self.ses_id_edit.text()
         exchange_id = self.exchange_id_edit.text()
@@ -821,6 +854,7 @@ class MainWindow(QWidget):
         self.daily_task_worker.start()
 
     def daily_task_finished(self):
+        """每日任务完成后的回调：恢复按钮状态"""
         self.start_button.setEnabled(True)
         self.stop_button.setEnabled(False)
         self.daily_task_button.setEnabled(True)
@@ -828,10 +862,12 @@ class MainWindow(QWidget):
         self.daily_task_worker = None
         
     def update_log(self, message):
+        """向日志显示区域追加一条带时间戳的消息"""
         timestamp = QDateTime.currentDateTime().toString("yyyy-MM-dd hh:mm:ss")
         self.log_display.append(f"[{timestamp}] {message}")
         
     def program_finished(self):
+        """兑换任务完成后的回调：恢复按钮状态"""
         self.start_button.setEnabled(True)
         self.stop_button.setEnabled(False)
         if not self.stop_requested:
@@ -840,6 +876,7 @@ class MainWindow(QWidget):
         self.worker = None
 
     def save_config(self):
+        """将当前表单配置保存到本地 config.json 文件（loading_config 为 True 时跳过）"""
         if self.loading_config:
             return
 
@@ -857,6 +894,7 @@ class MainWindow(QWidget):
         self.refresh_login_state()
     
     def show_about(self):
+        """弹出"关于"对话框，显示软件说明与免责声明"""
         QMessageBox.information(
             self,
             "作者: BAOfanTing 软件说明",
@@ -877,12 +915,13 @@ class MainWindow(QWidget):
         )
 
     def open_github(self):
+        """在浏览器中打开项目的 GitHub 仓库页面"""
         import webbrowser
-        # 打开项目的GitHub页面
         github_url = "https://github.com/BAOfanTing/AutoTicket"
         webbrowser.open(github_url)
     
     def load_config(self):
+        """从本地 config.json 加载保存的配置（login_name、ses_id、exchange_id 等）"""
         if os.path.exists(self.config_file):
             self.loading_config = True
             try:
@@ -910,12 +949,13 @@ class MainWindow(QWidget):
 
     def get_next_run_time(self):
         """
-        获取下一个运行时间点
+        根据当前时间自动推算下一个合理的运行时间点。
+
         规则：
-        1. 如果当前时间在7:00之前，选择当天的7:00
-        2. 如果当前时间在7:00到11:30之间，选择11:30
-        3. 如果当前时间在11:30到17:00之间，选择17:00
-        4. 如果当前时间超过17:00，选择第二天的7:00
+        1. 当前在 7:00 之前 → 当天 7:00
+        2. 当前在 7:00 ~ 11:30 → 当天 11:30
+        3. 当前在 11:30 ~ 17:00 → 当天 17:00
+        4. 当前已过 17:00 → 次日 7:00
         """
         from datetime import datetime, timedelta
         
@@ -941,10 +981,7 @@ class MainWindow(QWidget):
         return next_time.strftime("%Y-%m-%d %H:%M:%S")
 
     def check_update(self):
-        """
-        检查更新
-        :return: None
-        """
+        """在后台线程中检查是否有新版本发布，若有则提示用户下载"""
         try:
             server_url = "https://gitee.com/baofanting/auto-ticket/raw/master/AutoTicket_update_info.json"
             def update_callback(has_update, latest_version, download_url, message):

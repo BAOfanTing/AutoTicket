@@ -1,5 +1,6 @@
 <template>
   <view class="page">
+    <!-- 顶部横幅图片 -->
     <view class="hero">
       <image class="hero-image" src="../../resouse/login.jpg" mode="widthFix" />
     </view>
@@ -7,7 +8,7 @@
     <view class="card">
       <view class="title">e家登录</view>
 
-      <!-- 登录方式切换 -->
+      <!-- 登录方式切换：密码登录 / 短信验证码登录 -->
       <view class="mode-tabs">
         <text
           class="mode-tab"
@@ -21,13 +22,13 @@
         >短信验证码登录</text>
       </view>
 
-      <!-- 手机号（共用） -->
+      <!-- 手机号输入（两种登录方式共用） -->
       <view class="field">
         <text class="label">手机号</text>
         <input v-model="phone" class="input" placeholder="请输入手机号" />
       </view>
 
-      <!-- 密码登录字段 -->
+      <!-- 密码输入（仅密码登录模式显示） -->
       <template v-if="loginMode === 'password'">
         <view class="field">
           <text class="label">密码</text>
@@ -35,7 +36,7 @@
         </view>
       </template>
 
-      <!-- 验证码（共用） -->
+      <!-- 图形验证码区域：显示验证码图片 + 刷新按钮 -->
       <view class="field">
         <text class="label">图形验证码</text>
         <view class="captcha-row">
@@ -49,12 +50,13 @@
         </view>
       </view>
 
+      <!-- 用户输入图形验证码 -->
       <view class="field">
         <text class="label">输入验证码</text>
         <input v-model="captchaCode" class="input" placeholder="请输入图形验证码" />
       </view>
 
-      <!-- 短信验证码登录额外字段 -->
+      <!-- 短信验证码登录额外字段：短信验证码输入 + 获取按钮 -->
       <template v-if="loginMode === 'sms'">
         <view class="field">
           <text class="label">短信验证码</text>
@@ -71,6 +73,7 @@
         </view>
       </template>
 
+      <!-- 登录提交按钮 -->
       <button class="btn btn-primary" @click="submitLogin" :disabled="submitting">
         {{ submitting ? '登录中...' : '登录' }}
       </button>
@@ -84,23 +87,37 @@ import { onLoad } from '@dcloudio/uni-app'
 import { decodeCaptchaImage, getCaptchaU067, loginU004WithCode, sendSms, loginU065 } from '../../src/services/authService'
 import { loadAuth, saveAuth } from '../../src/utils/storage'
 
-// ==================== 状态 ====================
+// ==================== 响应式状态定义 ====================
+/** 当前登录模式：'password' 密码登录 / 'sms' 短信验证码登录 */
 const loginMode = ref('password')
+/** 手机号输入 */
 const phone = ref('')
+/** 密码输入 */
 const password = ref('')
+/** 用户输入的图形验证码 */
 const captchaCode = ref('')
+/** 图形验证码图片本地路径（用于 <image> 显示） */
 const captchaImage = ref('')
+/** 从接口获取的图形验证码原始数据（用于提交登录） */
 const captchaData = ref(null)
+/** 是否正在加载验证码 */
 const loadingCaptcha = ref(false)
+/** 是否正在提交登录请求 */
 const submitting = ref(false)
 
-// 短信登录相关
+/** 短信验证码输入 */
 const smsCode = ref('')
+/** 是否正在发送短信验证码 */
 const sendingSms = ref(false)
+/** 短信验证码发送后倒计时秒数 */
 const smsCountdown = ref(0)
+/** 倒计时定时器句柄 */
 let countdownTimer = null
 
 // ==================== 方法 ====================
+/**
+ * 初始化页面：检查本地是否有有效登录态，有则直接跳转主页，否则加载验证码
+ */
 async function initPage() {
   const auth = loadAuth()
   if (auth && auth.isLoggedIn && auth.loginName && auth.sesId) {
@@ -110,6 +127,9 @@ async function initPage() {
   await refreshCaptcha()
 }
 
+/**
+ * 刷新图形验证码：从接口获取验证码数据，解码为图片文件并显示
+ */
 async function refreshCaptcha() {
   loadingCaptcha.value = true
   captchaImage.value = ''
@@ -131,15 +151,17 @@ async function refreshCaptcha() {
   }
 }
 
+/** 切换到短信验证码登录模式 */
 function switchToSms() {
   loginMode.value = 'sms'
-  // 短信登录不需要密码，清除密码字段校验
 }
 
+/** 验证码图片加载成功回调 */
 function onImageLoadSuccess(e) {
   console.log('[captcha] 图片引擎加载成功！尺寸:', e.detail.width, e.detail.height)
 }
 
+/** 验证码图片渲染失败时的错误处理与提示 */
 function onCaptchaImageError(e) {
   console.error('[captcha] image render error', {
     err: e,
@@ -150,6 +172,10 @@ function onCaptchaImageError(e) {
   uni.showToast({ title: '验证码图片渲染失败，请重试', icon: 'none' })
 }
 
+/**
+ * 启动倒计时（默认 60 秒），每秒更新 smsCountdown
+ * @param {number} seconds - 倒计时总秒数，默认 60
+ */
 function startCountdown(seconds = 60) {
   smsCountdown.value = seconds
   countdownTimer = setInterval(() => {
@@ -161,6 +187,10 @@ function startCountdown(seconds = 60) {
   }, 1000)
 }
 
+/**
+ * 发送短信验证码：校验手机号与图形验证码后调用发短信接口
+ * 发送成功后启动 60 秒倒计时，防止重复发送
+ */
 async function handleSendSms() {
   if (!phone.value) {
     uni.showToast({ title: '请先输入手机号', icon: 'none' })
@@ -178,6 +208,7 @@ async function handleSendSms() {
   sendingSms.value = true
   try {
     const result = await sendSms(captchaData.value, phone.value.trim(), captchaCode.value.trim())
+    // 检查响应结果，result 为 '0' 表示成功
     if (!result || result.result !== '0') {
       uni.showToast({ title: (result && result.msg) || '短信发送失败', icon: 'none' })
       return
@@ -191,6 +222,10 @@ async function handleSendSms() {
   }
 }
 
+/**
+ * 提交登录：根据当前登录模式调用密码登录或短信登录接口
+ * 登录成功后将 loginName / userId / sesId 保存到本地存储，然后跳转主页
+ */
 async function submitLogin() {
   if (!phone.value) {
     uni.showToast({ title: '请输入手机号', icon: 'none' })
@@ -205,6 +240,7 @@ async function submitLogin() {
     return
   }
 
+  // 根据不同登录模式校验必填字段
   if (loginMode.value === 'password') {
     if (!password.value) {
       uni.showToast({ title: '请输入密码', icon: 'none' })
@@ -220,6 +256,7 @@ async function submitLogin() {
   submitting.value = true
   try {
     let result
+    // 密码登录：使用 U004 接口（含图形验证码校验）
     if (loginMode.value === 'password') {
       result = await loginU004WithCode(
         captchaData.value,
@@ -228,15 +265,18 @@ async function submitLogin() {
         captchaCode.value.trim()
       )
     } else {
+      // 短信验证码登录：使用 U065 接口
       result = await loginU065(phone.value.trim(), smsCode.value.trim())
     }
 
+    // 检查登录响应是否成功
     if (!result || result.result !== '0') {
       uni.showToast({ title: (result && result.msg) || '登录失败', icon: 'none' })
       await refreshCaptcha()
       return
     }
 
+    // 从登录响应中提取用户身份信息
     const loginName = result.login_name || result.user_id || ''
     const userId = result.user_id || loginName
     const sesId = result.ses_id || ''
@@ -247,6 +287,7 @@ async function submitLogin() {
       return
     }
 
+    // 保存登录态到本地存储
     saveAuth({
       isLoggedIn: true,
       loginName,
@@ -255,6 +296,7 @@ async function submitLogin() {
     })
 
     uni.showToast({ title: '登录成功', icon: 'success' })
+    // 延迟跳转以显示 Toast
     setTimeout(() => {
       uni.redirectTo({ url: '/pages/main/main' })
     }, 300)
@@ -267,6 +309,7 @@ async function submitLogin() {
 }
 
 // ==================== 生命周期 ====================
+/** 页面加载时初始化，检查登录态并加载验证码 */
 onLoad(() => {
   initPage()
 })

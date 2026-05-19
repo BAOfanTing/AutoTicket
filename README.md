@@ -161,6 +161,10 @@ node AutoTicket.js
 
 支持密码登录和短信验证码登录，登录完成后可执行每日任务（签到、评论、积分查询），以及绿色出行码展示。
 
+可以扫码使用体验版
+
+![image-20260519144129253](https://gitee.com/baofanting/image/raw/master/image/20260519144129328.png)
+
 ---
 
 ## 📁 项目结构

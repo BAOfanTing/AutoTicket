@@ -1,19 +1,23 @@
 <template>
   <view class="page">
+    <!-- 加载中的提示 -->
     <view class="card" v-if="loading">
       <view class="loading-text">正在获取绿色出行码...</view>
     </view>
 
+    <!-- 获取失败时显示错误信息和重试按钮 -->
     <view class="card" v-else-if="error">
       <view class="error-text">{{ error }}</view>
       <button class="btn btn-primary" @click="fetchQrCode">重试</button>
     </view>
 
     <template v-else>
+      <!-- 服务端渲染的二维码图片 -->
       <view class="card qr-card">
-        <canvas canvas-id="qrCanvas" class="qr-canvas"></canvas>
+        <image :src="qrImage" class="qr-image" mode="aspectFit" />
       </view>
 
+      <!-- 余额与交通卡信息卡片 -->
       <view class="card info-card">
         <view class="info-row">
           <text class="info-label">余额</text>
@@ -29,6 +33,7 @@
         </view>
       </view>
 
+      <!-- 关闭按钮 -->
       <view class="actions">
         <button class="btn btn-close" @click="goBack">关闭</button>
       </view>
@@ -37,17 +42,31 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted } from 'vue'
 import { loadAuth } from '../../src/utils/storage'
 import { getGreenTravelCode } from '../../src/services/qrService'
-import UQRCode from 'uqrcodejs'
 
+// ==================== 响应式状态定义 ====================
+/** 是否正在加载数据 */
 const loading = ref(true)
+/** 错误信息，为空表示无错误 */
 const error = ref('')
+/** 服务端返回的二维码图片 base64 */
+const qrImage = ref('')
+/** 交通卡余额 */
 const money = ref('0')
+/** 交通卡号 */
 const cardNo = ref('')
+/** 二维码有效期 */
 const deadline = ref('')
 
+// ==================== 方法 ====================
+
+/**
+ * 格式化时间戳为日期时间字符串
+ * @param {string|number} ts - Unix 时间戳（秒）
+ * @returns {string} 格式为 YYYY-MM-DD HH:mm:ss
+ */
 function formatDeadtime(ts) {
   if (!ts) return ''
   const date = new Date(Number(ts) * 1000)
@@ -60,6 +79,9 @@ function formatDeadtime(ts) {
   return `${y}-${M}-${d} ${h}:${m}:${s}`
 }
 
+/**
+ * 获取绿色出行二维码：设置 isImage=1 让服务端直接返回渲染好的图片
+ */
 async function fetchQrCode() {
   const auth = loadAuth()
   if (!auth || !auth.isLoggedIn || !auth.loginName || !auth.sesId) {
@@ -71,22 +93,28 @@ async function fetchQrCode() {
   loading.value = true
   error.value = ''
   try {
+    // 调用接口获取绿色出行码数据（isImage=1 让服务器返回图片）
     const data = await getGreenTravelCode(auth.loginName, auth.sesId)
-    if (!data || !data.qrcode) {
+    if (!data) {
       throw new Error('获取乘车码数据为空')
     }
+    // 优先使用服务端渲染的图片，没有则用 hex 数据自行渲染
+	console.log('code',data);
+    if (data.qrcodeImage) {
+		console.log("data.qrcodeImage",data.qrcodeImage)
+      // 服务端返回的可能是裸 base64 或带 data:image 前缀
+      qrImage.value = data.qrcodeImage.startsWith('data:')
+        ? data.qrcodeImage
+        : 'data:image/png;base64,' + data.qrcodeImage
+    } else if (data.qrcode) {
+      throw new Error('服务端未返回图片，请确认 isImage=1')
+    } else {
+      throw new Error('获取乘车码数据为空')
+    }
+    // 更新卡片信息
     money.value = data.money || '0'
     cardNo.value = data.trafficCardNo || ''
     deadline.value = formatDeadtime(data.deadTime)
-
-    await nextTick()
-    const qr = new UQRCode()
-    qr.data = data.qrcode
-    qr.size = 280
-    qr.make()
-    const ctx = uni.createCanvasContext('qrCanvas')
-    qr.canvasContext = ctx
-    qr.drawCanvas()
   } catch (e) {
     error.value = e.message || '获取绿色出行码失败'
   } finally {
@@ -94,10 +122,13 @@ async function fetchQrCode() {
   }
 }
 
+/** 返回上一页 */
 function goBack() {
   uni.navigateBack()
 }
 
+// ==================== 生命周期 ====================
+/** 组件挂载后自动获取绿色出行二维码 */
 onMounted(() => {
   fetchQrCode()
 })
@@ -145,7 +176,7 @@ onMounted(() => {
   padding: 40rpx;
 }
 
-.qr-canvas {
+.qr-image {
   width: 560rpx;
   height: 560rpx;
 }

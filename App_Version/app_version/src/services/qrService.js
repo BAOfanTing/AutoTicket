@@ -2,11 +2,15 @@ import { APP_VER_NO, CHANNEL, ENDPOINTS } from './constants'
 import { buildEncryptedPayload, decryptData2 } from './cryptoService'
 import { postJson } from './http'
 
+// 获取当前时间戳字符串（毫秒级）
 function nowTs() {
   return String(Date.now())
 }
 
 // OL82 - 获取绿色出行码 token
+// @param {string} userId - 用户 ID
+// @param {string} sesId - 会话 ID
+// @returns {Promise<string>} 返回 QR token
 export async function getQrToken(userId, sesId) {
   if (!userId || !sesId) {
     throw new Error('user_id 和 ses_id 不能为空')
@@ -37,7 +41,8 @@ export async function getQrToken(userId, sesId) {
   }
 }
 
-// OP80 - 记录用户量增加
+// OP80 - 记录用户访问量（统计接口，静默上传不抛错）
+// @param {string} userId - 用户 ID
 export async function recordQrVisit(userId) {
   if (!userId) return
 
@@ -57,7 +62,9 @@ export async function recordQrVisit(userId) {
   }
 }
 
-// 获取乘车码二维码数据（第三方接口）
+// 获取乘车码二维码数据（第三方接口，请求杭州公交码引擎 /hzcitizencodeengine/codeEngine/apply）
+// @param {string} token - QR 认证 token
+// @returns {Promise<Object>} 返回包含二维码数据的响应对象
 export async function getQrCode(token) {
   if (!token) {
     throw new Error('token 不能为空')
@@ -72,7 +79,7 @@ export async function getQrCode(token) {
     latitude: null,
     longitude: null,
     version: '1.0.0',
-    isImage: '0',
+    isImage: '1',
     timestamp: ts,
     globalSeq
   }

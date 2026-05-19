@@ -25,6 +25,7 @@ export function getNextRunTime() {
   return formatDateTime(target)
 }
 
+// 将 Date 对象格式化为 "YYYY-MM-DD HH:MM:SS" 字符串
 export function formatDateTime(date) {
   const yyyy = date.getFullYear()
   const mm = String(date.getMonth() + 1).padStart(2, '0')
@@ -35,6 +36,10 @@ export function formatDateTime(date) {
   return `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}`
 }
 
+// 将 "YYYY-MM-DD HH:MM:SS" 格式的字符串解析为 Date 对象
+// @param {string} text - 日期时间字符串
+// @returns {Date} 解析后的 Date 对象
+// @throws {Error} 格式不合法时抛出异常
 export function parseDateTime(text) {
   const normalized = text.replace(/-/g, '/')
   const date = new Date(normalized)

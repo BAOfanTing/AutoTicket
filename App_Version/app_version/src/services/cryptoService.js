@@ -17,8 +17,10 @@ import CryptoJS from 'crypto-js'
 import JSEncrypt from 'jsencrypt'
 import { KJUR } from 'jsrsasign'
 
-// 与 Python 版本一致的常量配置
+// 签名密钥（拼接到待签名字符串末尾，与 Python 端一致）
 const SIGN_KEY_NEW = 'zSw3MLRV7VuwT!*G'
+
+// 需要进行 3DES 加密的敏感字段集合（包含密码、手机号、金额、验证码等）
 const ENCRYPT_KEYS = new Set([
   'login_name',
   'login_auth_code',
@@ -51,6 +53,8 @@ const ENCRYPT_KEYS = new Set([
   'imgAuthCode',
   'imgUniCode'
 ])
+
+// 不参与签名计算的字段集合（大体积或二进制数据，签名前需排除）
 const NO_SIGN_KEYS = new Set([
   'answerContent',
   'surveyId',
@@ -65,11 +69,12 @@ const NO_SIGN_KEYS = new Set([
   'verCode'
 ])
 
-// 与 Login.py / AutoTicket.py 保持一致
+// RSA 公钥（用于加密 sessionKey，与 Login.py / AutoTicket.py 保持一致）
 const ENCRYPTION_PUBLIC_KEY_PEM = `-----BEGIN PUBLIC KEY-----
 MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC7yWoQaojBBqKI2H0j4e8ZeX/n1yip6hxrxSVth5F5n1JJ/B3liPMdz6K1chNLFTAcbI7hTL9KkphP9yQ+bPYD68Ajrt/DFrW679Zi1CoeetHVrM4sF68lYarGXwnSlKloaPWnI4Ch9cSqIvIOInlpeJqYPlJ8ZJvGCmbQoM6bewIDAQAB
 -----END PUBLIC KEY-----`
 
+// RSA 私钥（用于请求签名 RSA-SHA256，与 Login.py / AutoTicket.py 保持一致）
 const SIGNING_PRIVATE_KEY_PEM = `-----BEGIN PRIVATE KEY-----
 MIICeAIBADANBgkqhkiG9w0BAQEFAASCAmIwggJeAgEAAoGBAJ+C8Z9awsGU8DeB
 pq47p+pVBgIxWr9epYE5lTrVwoTvOv7dOBTsNgYPgDqFLbU8eZsV26DOvgd4TC5t
@@ -87,6 +92,7 @@ uR7RBU2WAmT7PoOfyaSkdN/++IVYQJBAJ/klCvQc/YfkFPNO0N2gK0UP4N8zmUc
 Q20lSzaIsom0Q3ai
 -----END PRIVATE KEY-----`
 
+// RSA 私钥（用于解密服务端返回的 data2 字段）
 const PRIVATE_KEY_PEM = `-----BEGIN RSA PRIVATE KEY-----
 MIICdQIBADANBgkqhkiG9w0BAQEFAASCAl8wggJbAgEAAoGBAIOBMtf2AIYQlrNy
 /lVPHx4R/LKI+Vtk3bKmzID8vdVnh/4WA3lczqfejM10Xfy3sNe4l5EeQTvnDgUH

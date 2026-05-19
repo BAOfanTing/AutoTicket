@@ -1,9 +1,11 @@
 <template>
   <view class="page">
+    <!-- 顶部横幅图片 -->
     <view class="hero">
       <image class="hero-image" src="../../resouse/home.jpg" mode="widthFix" />
     </view>
 
+    <!-- 登录状态卡片 -->
     <view class="card status-card">
       <view class="row">
         <text class="label">登录状态</text>
@@ -15,29 +17,35 @@
       <button class="btn btn-danger" @click="logout" :disabled="running">退出登录</button>
     </view>
 
+    <!-- 配置参数卡片 -->
     <view class="card">
       <view class="title">配置参数</view>
 
+      <!-- LOGIN_NAME 输入框 -->
       <view class="field">
         <text class="label">LOGIN_NAME / USER_ID</text>
         <input v-model="form.loginName" class="input" placeholder="请输入 LOGIN_NAME / USER_ID" />
       </view>
 
+      <!-- SES_ID 输入框 -->
       <view class="field">
         <text class="label">SES_ID</text>
         <input v-model="form.sesId" class="input" placeholder="请输入 SES_ID" />
       </view>
 
+      <!-- 兑换面额选择 -->
       <view class="field">
         <text class="label">EXCHANGE_ID（9=2块 / 10=4块 / 11=6块）</text>
         <input v-model="form.exchangeId" class="input" placeholder="例如 9 / 10 / 11" />
       </view>
 
+      <!-- 定时抢票时间设置 -->
       <view class="field">
         <text class="label">抢票时间</text>
         <input v-model="form.runTime" class="input" placeholder="YYYY-MM-DD HH:MM:SS" />
       </view>
 
+      <!-- 运行次数与间隔（并列布局） -->
       <view class="field inline">
         <view class="half">
           <text class="label">运行次数</text>
@@ -49,6 +57,7 @@
         </view>
       </view>
 
+      <!-- 操作按钮组 -->
       <view class="actions">
         <button class="btn btn-primary" @click="startProgram" :disabled="running || !isLoggedIn">启动</button>
         <button class="btn btn-danger" @click="stopProgram" :disabled="!running">停止</button>
@@ -59,6 +68,7 @@
       </view>
     </view>
 
+    <!-- 运行日志面板 -->
     <view class="card">
       <view class="title">运行日志</view>
       <scroll-view scroll-y class="log-box">
@@ -75,34 +85,49 @@ import { runDailyTaskWorkflow, runExchangeOnce } from '../../src/services/taskSe
 import { clearAuth, loadAuth, loadConfig, saveAuth, saveConfig } from '../../src/utils/storage'
 import { formatDateTime, getNextRunTime, parseDateTime } from '../../src/utils/time'
 
-// ==================== 状态 ====================
+// ==================== 响应式状态定义 ====================
+/** 是否正在执行兑换任务循环 */
 const running = ref(false)
+/** 是否正在执行每日任务 */
 const dailyTaskRunning = ref(false)
+/** 是否请求停止兑换任务 */
 const stopRequested = ref(false)
+/** 定时器句柄（用于 setTimeout 取消） */
 const timerId = ref(null)
+/** 运行日志列表，每项为一行日志文本 */
 const logs = ref([])
+/** 配置表单数据 */
 const form = reactive({
-  loginName: '',
-  userId: '',
-  sesId: '',
-  exchangeId: '10',
-  runTime: getNextRunTime(),
-  runCount: '100',
-  timeSleep: '0.08'
+  loginName: '',   // 用户登录名
+  userId: '',      // 用户 ID
+  sesId: '',       // 会话 ID
+  exchangeId: '10', // 兑换面额 ID
+  runTime: getNextRunTime(), // 定时执行时间
+  runCount: '100',          // 重复执行次数
+  timeSleep: '0.08'         // 每次执行间隔（秒）
 })
 
+/** 计算属性：是否已登录（loginName 和 sesId 均不为空） */
 const isLoggedIn = computed(() => Boolean(form.loginName && form.sesId))
 
 // ==================== 方法 ====================
+/** 将当前表单配置持久化到本地存储 */
 function persistConfig() {
   saveConfig({ ...form })
 }
 
+/**
+ * 追加一条日志记录（带时间戳）
+ * @param {string} message - 日志内容
+ */
 function appendLog(message) {
   const ts = formatDateTime(new Date())
   logs.value.push(`[${ts}] ${message}`)
 }
 
+/**
+ * 退出登录：清除本地登录态，跳转回登录页
+ */
 function logout() {
   if (running.value || dailyTaskRunning.value) {
     uni.showToast({ title: '请先停止任务后再退出登录', icon: 'none' })
@@ -115,6 +140,11 @@ function logout() {
   uni.redirectTo({ url: '/pages/login/login' })
 }
 
+/**
+ * 校验用户输入的配置参数是否合法
+ * @returns {{ runCount: number, timeSleep: number, runDate: Date }} 解析后的数值
+ * @throws {Error} 校验失败时抛出异常
+ */
 function validateInputs() {
   const { loginName, sesId, exchangeId, runTime, runCount, timeSleep } = form
   if (!loginName || !sesId || !exchangeId || !runTime || !runCount || !timeSleep) {
@@ -134,6 +164,9 @@ function validateInputs() {
   return { runCount: countNum, timeSleep: sleepNum, runDate }
 }
 
+/**
+ * 停止兑换任务：设置停止标志，清除定时器
+ */
 function stopProgram() {
   stopRequested.value = true
   running.value = false
@@ -144,6 +177,10 @@ function stopProgram() {
   appendLog('程序已停止')
 }
 
+/**
+ * 启动兑换任务：保存配置，校验参数，
+ * 等待到指定时间后开始循环执行兑换请求，每次执行间隔由 timeSleep 控制
+ */
 async function startProgram() {
   try {
     persistConfig()
@@ -154,6 +191,7 @@ async function startProgram() {
     running.value = true
     appendLog(`程序已启动，将在 ${form.runTime} 执行兑换任务，共执行 ${runCount} 次`)
 
+    // 计算距离开抢时间的等待毫秒数
     const waitMs = Math.max(runDate.getTime() - now.getTime(), 0)
     timerId.value = setTimeout(async () => {
       for (let i = 0; i < runCount; i += 1) {
@@ -171,6 +209,7 @@ async function startProgram() {
           appendLog(`兑换请求失败: ${error.message}`)
         }
 
+        // 非最后一次执行且未停止时，按间隔等待
         if (i < runCount - 1 && !stopRequested.value) {
           await new Promise((resolve) => {
             timerId.value = setTimeout(resolve, Math.max(timeSleep * 1000, 20))
@@ -190,10 +229,14 @@ async function startProgram() {
   }
 }
 
+/** 跳转到绿色出行二维码页面 */
 function goQrCode() {
   uni.navigateTo({ url: '/pages/qrcode/qrcode' })
 }
 
+/**
+ * 执行每日任务工作流
+ */
 async function runDailyTask() {
   if (!form.loginName || !form.sesId) {
     uni.showToast({ title: 'LOGIN_NAME 和 SES_ID 必须填写', icon: 'none' })
@@ -218,6 +261,10 @@ async function runDailyTask() {
 }
 
 // ==================== 生命周期 ====================
+/**
+ * 页面加载时：从本地存储恢复登录态和配置，
+ * 如果未登录则重定向到登录页
+ */
 onLoad(() => {
   const auth = loadAuth()
   const config = loadConfig()
@@ -240,6 +287,7 @@ onLoad(() => {
 })
 
 // ==================== 监听 ====================
+/** 表单数据变化时自动持久化保存到本地存储 */
 watch(form, () => { persistConfig() }, { deep: true })
 </script>
 

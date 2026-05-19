@@ -1,9 +1,12 @@
 // QRCode 编码核心（基于 qrcode-npm / qrcode-generator 算法）
 // 纯 JS 实现，无 DOM 依赖
 
+// QR 编码模式常量（当前仅支持 8 位字节模式）
 const QR_MODE = { MODE_8BIT_BYTE: 1 << 2 }
+// QR 纠错等级：L(低), M(中), Q(较高), H(高)
 const QR_ERROR = { L: 1, M: 0, Q: 3, H: 2 }
 
+// 各版本（1-40）的对齐图案中心位置表，用于在矩阵中放置对齐图案
 const PATTERN_POS_TABLE = [
   [], [6, 18], [6, 22], [6, 26], [6, 30], [6, 34], [6, 22, 38], [6, 24, 42], [6, 26, 46],
   [6, 28, 50], [6, 30, 54], [6, 32, 58], [6, 34, 62], [6, 26, 46, 66], [6, 26, 48, 70],
@@ -18,10 +21,13 @@ const PATTERN_POS_TABLE = [
   [6, 34, 62, 90, 118, 146, 174, 202]
 ]
 
+// BCH 编码用生成多项式系数（G15 用于格式信息，G18 用于版本信息）
 const G15 = 1335
 const G18 = 7973
 const G15_MASK = 0x5412
 
+// 计算格式信息的 BCH 编码（含纠错码 + 掩码异或）
+// 用于生成二维码矩阵中的格式信息区（纠错等级与掩码模式的编码）
 function getBCHTypeInfo(d) {
   let d2 = d << 10
   while (getBCHDigit(d2) - getBCHDigit(G15) >= 0) {
@@ -30,6 +36,7 @@ function getBCHTypeInfo(d) {
   return ((d << 10) | d2) ^ G15_MASK
 }
 
+// 计算版本信息的 BCH 编码（用于版本 7 及以上的二维码）
 function getBCHTypeNumber(d) {
   let d2 = d << 12
   while (getBCHDigit(d2) - getBCHDigit(G18) >= 0) {
@@ -38,12 +45,15 @@ function getBCHTypeNumber(d) {
   return (d << 12) | d2
 }
 
+// 计算整数二进制表示的位数（最高位 1 所在位置）
 function getBCHDigit(d) {
   let digit = 0
   while (d !== 0) { digit++; d >>>= 1 }
   return digit
 }
 
+// 根据版本和纠错等级，获取 RS 纠错码块列表
+// 每个块包含 [总字节数, 纠错码字节数]
 function getRSECCBlocks(typeNumber, errorCorrectLevel) {
   const rsBlock = getRsBlockTable(typeNumber, errorCorrectLevel)
   if (!rsBlock) return []
@@ -58,6 +68,8 @@ function getRSECCBlocks(typeNumber, errorCorrectLevel) {
   return list
 }
 
+// QR 码 RS 纠错块配置查找表（按版本 1-40 * 4 种纠错等级索引）
+// 每组三个数字: [块数量, 每块总字节数, 每块数据字节数]
 function getRsBlockTable(typeNumber, errorCorrectLevel) {
   const tbl = [
     [1, 26, 19], [1, 26, 16], [1, 26, 13], [1, 26, 9],
@@ -105,7 +117,9 @@ function getRsBlockTable(typeNumber, errorCorrectLevel) {
   return tbl[idx]
 }
 
+// 伽罗瓦域多项式类，用于 Reed-Solomon 纠错编码的运算
 class QRPolynomial {
+  // 构造函数：去除前导零后，可选择右移（增加更高次项）
   constructor(num, shift) {
     if (!num.length) throw new Error()
     let offset = 0
@@ -115,6 +129,7 @@ class QRPolynomial {
   }
   get(index) { return this.num[index] }
   get length() { return this.num.length }
+  // 多项式乘法（在伽罗瓦域 GF(256) 上进行）
   multiply(e) {
     const num = new Array(this.length + e.length - 1)
     for (let i = 0; i < this.length; i++) {
@@ -124,6 +139,7 @@ class QRPolynomial {
     }
     return new QRPolynomial(num, 0)
   }
+  // 多项式取模（用于 RS 编码，求余数作为纠错码）
   mod(e) {
     if (this.length - e.length < 0) return this
     const ratio = galLog(this.get(0)) - galLog(e.get(0))
@@ -133,16 +149,22 @@ class QRPolynomial {
   }
 }
 
+// 伽罗瓦域 GF(256) 的指数表和对数表，用于加速域内运算
 const EXP_TABLE = new Array(256)
 const LOG_TABLE = new Array(256)
 for (let i = 0; i < 8; i++) EXP_TABLE[i] = 1 << i
 for (let i = 8; i < 256; i++) EXP_TABLE[i] = EXP_TABLE[i - 4] ^ EXP_TABLE[i - 5] ^ EXP_TABLE[i - 6] ^ EXP_TABLE[i - 8]
 for (let i = 0; i < 255; i++) LOG_TABLE[EXP_TABLE[i]] = i
 
+// 伽罗瓦域 GF(256) 上的对数运算
 function galLog(a) { if (a < 1) throw new Error(); return LOG_TABLE[a] }
+// 伽罗瓦域 GF(256) 上的指数运算
 function galExp(a) { while (a < 0) a += 255; while (a > 255) a -= 255; return EXP_TABLE[a] }
+// 伽罗瓦域 GF(256) 上的乘法运算
 function galMul(a, b) { if (a === 0 || b === 0) return 0; return EXP_TABLE[LOG_TABLE[a] + LOG_TABLE[b]] }
 
+// 生成 Reed-Solomon 纠错码生成多项式
+// ecCount: 纠错码字节数
 function rsGenPoly(ecCount) {
   const poly = new QRPolynomial([1], 0)
   for (let i = 0; i < ecCount; i++) {
@@ -151,6 +173,8 @@ function rsGenPoly(ecCount) {
   return poly
 }
 
+// 对数据进行 Reed-Solomon 编码，返回纠错码字节数组
+// data: 输入数据字节数组, ecCount: 需要生成的纠错码字节数
 function rsEncode(data, ecCount) {
   if (data.length - ecCount <= 0) return
   const poly = new QRPolynomial(data, 0)
@@ -162,12 +186,17 @@ function rsEncode(data, ecCount) {
   return result
 }
 
+// 生成二维码矩阵（二维 0/1 数组），作为绘制二维码的输入
+// @param {string} str - 要编码的文本内容
+// @param {number} errorCorrectLevel - 纠错等级，默认 QR_ERROR.M
+// @returns {number[][]} 尺寸为 (4*typeNumber+17) 的二维 0/1 矩阵
 export function generateQRMatrix(str, errorCorrectLevel = QR_ERROR.M) {
   const typeNumber = Math.min(40, Math.max(1, getTypeNumber(str, errorCorrectLevel)))
   const data = getData(str, typeNumber, errorCorrectLevel)
   return buildMatrix(typeNumber, errorCorrectLevel, data)
 }
 
+// 根据输入文本长度和纠错等级，确定所需的最小 QR 版本号（1-40）
 function getTypeNumber(str, ecl) {
   const lengths = [
     [0, 0, 0, 0], [17, 14, 11, 7], [32, 26, 20, 14], [53, 42, 32, 24], [78, 62, 46, 34],
@@ -190,6 +219,7 @@ function getTypeNumber(str, ecl) {
   return 1
 }
 
+// 获取指定版本和模式下的字符数长度字段的位数
 function getDataLen(typeNumber, mode) {
   const bits = [0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8]
   const bits8 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8]
@@ -197,9 +227,11 @@ function getDataLen(typeNumber, mode) {
   return bits[typeNumber]
 }
 
+// 对输入字符串进行编码，添加模式指示符、字符计数、数据位、终结符和填充字节，
+// 最后进行 RS 纠错编码并交错排列，返回最终的数据字节数组
 function getData(str, typeNumber, errorCorrectLevel) {
   const buf = []
-  // Mode indicator: 0100 for 8-bit byte
+    // 模式指示符：0100 表示 8 位字节模式
   buf.push(0, 1, 0, 0)
   // Character count
   const lenBits = getDataLen(typeNumber, QR_MODE.MODE_8BIT_BYTE)
@@ -258,11 +290,14 @@ function getData(str, typeNumber, errorCorrectLevel) {
   return result
 }
 
+// 计算指定版本和纠错等级下，可容纳的最大数据位数
 function getMaxDataBits(typeNumber, errorCorrectLevel) {
   const rsBlocks = getRSECCBlocks(typeNumber, errorCorrectLevel)
   return rsBlocks.reduce((s, b) => s + b[0], 0) * 8
 }
 
+// 根据版本编码、纠错等级和数据字节，构建完整的二维码矩阵（含所有功能图案和数据）
+// 返回经过最优掩码处理后的二维 0/1 数组
 function buildMatrix(typeNumber, errorCorrectLevel, data) {
   const modules = []
   const size = typeNumber * 4 + 17
@@ -271,7 +306,7 @@ function buildMatrix(typeNumber, errorCorrectLevel, data) {
     for (let col = 0; col < size; col++) modules[row][col] = null
   }
 
-  // Finder + separator
+  // 放置定位图案（Finder Pattern）及其分隔符
   for (let i = 0; i < 8; i++) {
     for (let j = 0; j < 8; j++) {
       if (i === 7 || j === 7) continue
@@ -284,7 +319,7 @@ function buildMatrix(typeNumber, errorCorrectLevel, data) {
     }
   }
 
-  // Alignment patterns
+  // 放置对齐图案（Alignment Pattern）
   const positions = PATTERN_POS_TABLE[typeNumber - 1] || []
   for (const p1 of positions) {
     for (const p2 of positions) {
@@ -301,16 +336,16 @@ function buildMatrix(typeNumber, errorCorrectLevel, data) {
     }
   }
 
-  // Timing patterns
+  // 放置时钟图案（Timing Pattern）：第 6 行和第 6 列交替黑白
   for (let i = 8; i < size - 8; i++) {
     modules[6][i] = i % 2 === 0 ? 1 : 0
     modules[i][6] = i % 2 === 0 ? 1 : 0
   }
 
-  // Dark module
+  // 暗色模块（Dark Module）：右下角固定为黑色
   modules[size - 8][8] = 1
 
-  // Data placement
+  // 数据放置：从右下角开始，双列蛇形逐位填入矩阵
   let idx = 0
   for (let col = size - 1; col > 0; col -= 2) {
     if (col <= 6) col--
@@ -330,7 +365,7 @@ function buildMatrix(typeNumber, errorCorrectLevel, data) {
     }
   }
 
-  // Apply mask
+  // 尝试 8 种掩码模式，评估每种得分，选取最优掩码
   const bestMask = { score: Infinity, mask: 0, modules: null }
   for (let mask = 0; mask < 8; mask++) {
     const masked = modules.map(row => [...row])
@@ -351,7 +386,7 @@ function buildMatrix(typeNumber, errorCorrectLevel, data) {
         if (cond) masked[r][c] = masked[r][c] ? 0 : 1
       }
     }
-    // Format info
+    // 放置格式信息（纠错等级 + 掩码编号的 BCH 编码）
     const fmt = getBCHTypeInfo((errorCorrectLevel << 3) | mask)
     for (let i = 0; i < 15; i++) {
       const v = (fmt >> i) & 1
@@ -364,7 +399,7 @@ function buildMatrix(typeNumber, errorCorrectLevel, data) {
     }
     masked[size - 8][8] = 1
 
-    // Score
+    // 评估掩码质量分数（规则 1：连续同色模块惩罚）
     let score = 0
     for (let r = 0; r < size; r++) {
       let run = 0, prev = -1
@@ -380,7 +415,7 @@ function buildMatrix(typeNumber, errorCorrectLevel, data) {
         if (run >= 6) score += run + 3
       }
     }
-    // 2x2 blocks
+    // 规则 2：2x2 同色方块惩罚
     for (let r = 0; r < size - 1; r++) {
       for (let c = 0; c < size - 1; c++) {
         const v = masked[r][c]
@@ -389,7 +424,7 @@ function buildMatrix(typeNumber, errorCorrectLevel, data) {
         }
       }
     }
-    // Balance
+    // 规则 3：黑白比例失衡惩罚
     const dark = masked.reduce((s, row) => s + row.reduce((s2, v) => s2 + (v === 1 ? 1 : 0), 0), 0)
     const percent = dark / (size * size) * 100
     const diff = Math.abs(percent - 50)

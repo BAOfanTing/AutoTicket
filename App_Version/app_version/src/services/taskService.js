@@ -2,10 +2,13 @@ import { APP_VER_NO, CHANNEL, ENDPOINTS } from './constants'
 import { buildEncryptedPayload, decryptData2 } from './cryptoService'
 import { postJson } from './http'
 
+// 获取当前时间戳字符串（毫秒级）
 function nowTs() {
   return String(Date.now())
 }
 
+// 解密并解析服务端加密响应 data2 字段，返回 JSON 对象
+// 若 JSON 解析失败则返回 { raw: plaintext }
 function parseData2Response(response) {
   if (!response || !response.data2) {
     throw new Error('接口返回缺少 data2')

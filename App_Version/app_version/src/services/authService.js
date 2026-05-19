@@ -3,11 +3,13 @@ import { APP_VER_NO, CHANNEL, ENDPOINTS } from './constants'
 import { buildEncryptedPayload, decryptData2 } from './cryptoService'
 import { postJson } from './http'
 
+// 获取当前时间戳字符串（毫秒级）
 function nowTs() {
   return String(Date.now())
 }
 
-// 获取验证码（对应 Login.py:get_captcha_u067）
+// 获取登录图形验证码（对应 Login.py:get_captcha_u067）
+// @returns {Promise<Object>} 返回包含 img（base64 图片）和 imgUniCode（验证码标识）的对象
 export async function getCaptchaU067() {
   const payload = buildEncryptedPayload({
     channel: CHANNEL,
@@ -67,10 +69,11 @@ function normalizeBase64(raw) {
   return normalized;
 }
 
+// 归一化本地图片路径，统一转为 wxfile 协议路径（uni-app 可加载）
 function normalizeLocalImagePath(filePath) {
   if (!filePath) return ''
-    // 统一转换：无论 http://usr/ 还是直接的 /usr/，都转为 wxfile://usr/
-    return filePath.replace('http://usr/', 'wxfile://usr/').replace(/^\/?usr\//, 'wxfile://usr/')
+  // 统一转换：无论 http://usr/ 还是直接的 /usr/，都转为 wxfile://usr/
+  return filePath.replace('http://usr/', 'wxfile://usr/').replace(/^\/?usr\//, 'wxfile://usr/')
 }
 
 // 将 base64 图片数据写入临时文件，返回可被 image 组件加载的路径
