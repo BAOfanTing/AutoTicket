@@ -320,14 +320,16 @@ class LoginDialog(QDialog):
 
 
 class QRCodeDialog(QDialog):
-    """绿色出行码展示对话框，显示服务端渲染的二维码图片及余额、卡号、有效期信息"""
+    """绿色出行码展示对话框，显示服务端渲染的二维码图片及余额、卡号、有效期和优惠券统计信息"""
 
-    def __init__(self, qrcode_image, money, card_no, deadline, parent=None):
+    def __init__(self, qrcode_image, money, card_no, deadline, subway_info=None, parent=None):
         super().__init__(parent)
         self.setWindowTitle("绿色出行码")
         self.setModal(True)
-        self.setMinimumWidth(380)
-        self.setMinimumHeight(520)
+        self.setMinimumWidth(420)
+        self.setMinimumHeight(640)
+
+        subway_info = subway_info or {}
 
         layout = QVBoxLayout()
         layout.setAlignment(Qt.AlignCenter)
@@ -367,6 +369,30 @@ class QRCodeDialog(QDialog):
         info_layout.addWidget(card_label)
         info_layout.addWidget(deadline_label)
 
+        coupon_frame = QFrame()
+        coupon_frame.setStyleSheet("QFrame { background: #f5f5f7; border-radius: 12px; padding: 12px; }")
+        coupon_layout = QVBoxLayout(coupon_frame)
+        coupon_layout.setSpacing(6)
+
+        coupon_title = QLabel("地铁优惠券")
+        coupon_title.setAlignment(Qt.AlignCenter)
+        coupon_title.setStyleSheet("font-size: 18px; font-weight: 700; color: #1d1d1f;")
+        coupon_layout.addWidget(coupon_title)
+
+        coupon_rows = [
+            ("已使用张数", subway_info.get("use_num", "0")),
+            ("2元券数量", subway_info.get("num_2", "0")),
+            ("4元券数量", subway_info.get("num_4", "0")),
+            ("6元券数量", subway_info.get("num_6", "0")),
+            ("已过期张数", subway_info.get("expire_num", "0")),
+        ]
+
+        for label_text, value_text in coupon_rows:
+            row_label = QLabel(f"{label_text}: {value_text}")
+            row_label.setAlignment(Qt.AlignCenter)
+            row_label.setStyleSheet("font-size: 14px; color: #3a3a3c;")
+            coupon_layout.addWidget(row_label)
+
         close_btn = QPushButton("关闭")
         close_btn.setMinimumHeight(44)
         close_btn.setStyleSheet(
@@ -377,6 +403,7 @@ class QRCodeDialog(QDialog):
 
         layout.addWidget(qr_label)
         layout.addWidget(info_frame)
+        layout.addWidget(coupon_frame)
         layout.addWidget(close_btn)
         self.setLayout(layout)
 
@@ -742,7 +769,7 @@ class MainWindow(QWidget):
         QMessageBox.information(self, "退出登录", "已清除本地登录状态。")
 
     def show_qr_code(self):
-        """获取并展示绿色出行码（token → 乘车码 → QR 码弹窗），同时在后台记录访问量"""
+        """获取并展示绿色出行码（token → 乘车码 → QR 码弹窗），同时查询优惠券统计并在后台记录访问量"""
         try:
             login_name = self.login_name_edit.text().strip()
             ses_id = self.ses_id_edit.text().strip()
@@ -775,7 +802,18 @@ class MainWindow(QWidget):
                 QMessageBox.warning(self, "数据错误", "服务端未返回图片，请确认接口参数")
                 return
 
-            dialog = QRCodeDialog(qrcode_image, money, card_no, deadline, self)
+            subway_info = {}
+            try:
+                self.update_log("正在查询地铁优惠券统计...")
+                subway_result = Login.get_subway_ticket_records(login_name, ses_id)
+                if subway_result and subway_result.get("result") == "0":
+                    subway_info = subway_result
+                else:
+                    self.update_log("地铁优惠券统计查询失败，已跳过展示")
+            except Exception as subway_error:
+                self.update_log(f"地铁优惠券统计查询失败: {str(subway_error)}")
+
+            dialog = QRCodeDialog(qrcode_image, money, card_no, deadline, subway_info, self)
             dialog.exec_()
             self.update_log("绿色出行码展示完成")
 

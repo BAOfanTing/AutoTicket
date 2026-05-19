@@ -33,6 +33,53 @@
         </view>
       </view>
 
+      <!-- 地铁优惠券查询结果 -->
+      <view class="card info-card">
+        <view class="title">地铁优惠券</view>
+        <view class="info-row">
+          <text class="info-label">可用张数</text>
+          <text class="info-value">{{ subwayInfo.useNum }}</text>
+        </view>
+        <view class="info-row">
+          <text class="info-label">2元券</text>
+          <text class="info-value">{{ subwayInfo.num2 }}</text>
+        </view>
+        <view class="info-row">
+          <text class="info-label">4元券</text>
+          <text class="info-value">{{ subwayInfo.num4 }}</text>
+        </view>
+        <view class="info-row">
+          <text class="info-label">6元券</text>
+          <text class="info-value">{{ subwayInfo.num6 }}</text>
+        </view>
+        <view class="info-row">
+          <text class="info-label">即将过期</text>
+          <text class="info-value">{{ subwayInfo.expireNum }}</text>
+        </view>
+        <view class="info-row">
+          <text class="info-label">记录总数</text>
+          <text class="info-value">{{ subwayInfo.totalCount }}</text>
+        </view>
+
+        <view v-if="subwayInfo.list.length" class="coupon-list">
+          <view class="coupon-item" v-for="(item, index) in subwayInfo.list" :key="index">
+            <view class="coupon-line">
+              <text class="coupon-label">券信息</text>
+              <text class="coupon-value">{{ item.award_name || item.awardTypeName || item.award_type || '-' }}</text>
+            </view>
+            <view class="coupon-line">
+              <text class="coupon-label">状态</text>
+              <text class="coupon-value">{{ item.use_state_name || item.useStateName || item.use_state || '-' }}</text>
+            </view>
+            <view class="coupon-line" v-if="item.expire_time || item.expireTime">
+              <text class="coupon-label">过期时间</text>
+              <text class="coupon-value">{{ item.expire_time || item.expireTime }}</text>
+            </view>
+          </view>
+        </view>
+        <view v-else class="empty-text">暂无优惠券记录</view>
+      </view>
+
       <!-- 关闭按钮 -->
       <view class="actions">
         <button class="btn btn-close" @click="goBack">关闭</button>
@@ -44,7 +91,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { loadAuth } from '../../src/utils/storage'
-import { getGreenTravelCode } from '../../src/services/qrService'
+import { getGreenTravelCode, getSubwayTicketRecords } from '../../src/services/qrService'
 
 // ==================== 响应式状态定义 ====================
 /** 是否正在加载数据 */
@@ -59,6 +106,16 @@ const money = ref('0')
 const cardNo = ref('')
 /** 二维码有效期 */
 const deadline = ref('')
+/** 地铁优惠券查询结果 */
+const subwayInfo = ref({
+  useNum: '0',
+  num2: '0',
+  num4: '0',
+  num6: '0',
+  expireNum: '0',
+  totalCount: '0',
+  list: []
+})
 
 // ==================== 方法 ====================
 
@@ -80,7 +137,7 @@ function formatDeadtime(ts) {
 }
 
 /**
- * 获取绿色出行二维码：设置 isImage=1 让服务端直接返回渲染好的图片
+ * 获取绿色出行二维码并查询地铁优惠券统计
  */
 async function fetchQrCode() {
   const auth = loadAuth()
@@ -93,28 +150,38 @@ async function fetchQrCode() {
   loading.value = true
   error.value = ''
   try {
-    // 调用接口获取绿色出行码数据（isImage=1 让服务器返回图片）
-    const data = await getGreenTravelCode(auth.loginName, auth.sesId)
-    if (!data) {
+    const [qrData, subwayData] = await Promise.all([
+      getGreenTravelCode(auth.loginName, auth.sesId),
+      getSubwayTicketRecords(auth.loginName, auth.sesId)
+    ])
+
+    if (!qrData) {
       throw new Error('获取乘车码数据为空')
     }
-    // 优先使用服务端渲染的图片，没有则用 hex 数据自行渲染
-	console.log('code',data);
-    if (data.qrcodeImage) {
-		console.log("data.qrcodeImage",data.qrcodeImage)
-      // 服务端返回的可能是裸 base64 或带 data:image 前缀
-      qrImage.value = data.qrcodeImage.startsWith('data:')
-        ? data.qrcodeImage
-        : 'data:image/png;base64,' + data.qrcodeImage
-    } else if (data.qrcode) {
+
+    if (qrData.qrcodeImage) {
+      qrImage.value = qrData.qrcodeImage.startsWith('data:')
+        ? qrData.qrcodeImage
+        : 'data:image/png;base64,' + qrData.qrcodeImage
+    } else if (qrData.qrcode) {
       throw new Error('服务端未返回图片，请确认 isImage=1')
     } else {
       throw new Error('获取乘车码数据为空')
     }
-    // 更新卡片信息
-    money.value = data.money || '0'
-    cardNo.value = data.trafficCardNo || ''
-    deadline.value = formatDeadtime(data.deadTime)
+
+    money.value = qrData.money || '0'
+    cardNo.value = qrData.trafficCardNo || ''
+    deadline.value = formatDeadtime(qrData.deadTime)
+
+    subwayInfo.value = {
+      useNum: subwayData.use_num || '0',
+      num2: subwayData.num_2 || '0',
+      num4: subwayData.num_4 || '0',
+      num6: subwayData.num_6 || '0',
+      expireNum: subwayData.expire_num || '0',
+      totalCount: subwayData.total_count || '0',
+      list: Array.isArray(subwayData.list) ? subwayData.list : []
+    }
   } catch (e) {
     error.value = e.message || '获取绿色出行码失败'
   } finally {
@@ -152,6 +219,12 @@ onMounted(() => {
   margin-bottom: 24rpx;
   width: 100%;
   box-sizing: border-box;
+}
+
+.title {
+  font-size: 34rpx;
+  font-weight: 700;
+  margin-bottom: 20rpx;
 }
 
 .loading-text {
@@ -212,6 +285,39 @@ onMounted(() => {
   color: #ff9500;
   font-size: 32rpx;
   font-weight: 700;
+}
+
+.coupon-list {
+  margin-top: 20rpx;
+}
+
+.coupon-item {
+  padding: 20rpx 0;
+  border-top: 1rpx solid #f0f0f0;
+}
+
+.coupon-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10rpx;
+}
+
+.coupon-label {
+  font-size: 24rpx;
+  color: #8e8e93;
+}
+
+.coupon-value {
+  font-size: 24rpx;
+  color: #1d1d1f;
+}
+
+.empty-text {
+  margin-top: 20rpx;
+  text-align: center;
+  color: #8e8e93;
+  font-size: 26rpx;
 }
 
 .actions {

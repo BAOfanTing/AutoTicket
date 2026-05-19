@@ -504,6 +504,67 @@ def get_qr_code(token):
         return None
 
 
+def get_subway_ticket_records(login_name, ses_id):
+    """
+    请求 OL83 接口，查询地铁优惠券统计与记录列表。
+
+    参数:
+        login_name (str): 登录名 / 用户 ID
+        ses_id (str): 会话 ID
+
+    返回:
+        dict: 解密后的 OL83 响应数据，失败返回 None
+    """
+    if not login_name or not ses_id:
+        raise ValueError("login_name 和 ses_id 都必须填写。")
+
+    payload = {
+        "channel": CHANNEL,
+        "app_ver_no": APP_VER_NO,
+        "timestamp": str(int(time.time() * 1000)),
+        "login_name": login_name,
+        "user_id": login_name,
+        "ses_id": ses_id,
+        "use_state": "1",
+        "award_type": "1",
+        "page_size": 10,
+        "page_num": 1
+    }
+
+    m = rand_str(24).upper()
+    payload["dec_key"] = rsa_encrypt(ENCRYPTION_PUBLIC_KEY_PEM, m)
+
+    encrypt_keys = ["login_name", "user_id"]
+    for k in encrypt_keys:
+        if k in payload:
+            payload[k] = des3_ecb_pkcs7_encrypt(m, payload[k])
+
+    keys_for_sign = list(payload.keys())
+    values_for_sign = [str(v) for v in payload.values()]
+    values_concat = "".join(values_for_sign)
+    string_to_sign = values_concat + SIGN_KEY_NEW
+    payload["key"] = ",".join(keys_for_sign)
+    payload["sign"] = rsa_sha256_sign(SIGNING_PRIVATE_KEY_PEM, string_to_sign)
+
+    url = BASE_URL + "/unionApp/interf/front/OL/OL83"
+    print(f"\n[*] 正在请求 OL83 查询地铁优惠券...")
+    resp = session.post(url, json=payload, verify=False)
+
+    try:
+        resp_json = resp.json()
+        if "data2" in resp_json:
+            decrypted_json_str = decrypt_data2(resp_json["data2"])
+            data_dict = json.loads(decrypted_json_str)
+            print("[+] OL83 响应解密成功：")
+            print(json.dumps(data_dict, indent=2, ensure_ascii=False))
+            return data_dict
+        print("[-] OL83 响应中没有 data2 字段:", resp.text)
+        return None
+    except Exception as e:
+        print(f"[-] OL83 请求解密失败: {e}")
+        return None
+
+
 def qr_code_workflow(user_id_plain, ses_id):
     """
     完整绿色出行码流程：OL82 获取 token → OP80 记录访问 → 获取乘车码

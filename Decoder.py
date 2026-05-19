@@ -31,6 +31,9 @@ DES_IV = b"12345678"
 # ================== 解密函数 ==================
 def pkcs7_unpad(data):
     """去除 PKCS7 填充（末字节表示填充长度）"""
+    pad_len = data[-1]
+    if pad_len > len(data) - 1:
+        raise ValueError("Invalid padding length for PKCS7 padding")
     return data[:-pad_len]
 
 def decrypt_data2(data2):
@@ -75,5 +78,5 @@ def decrypt_data2(data2):
     return decrypted.decode()
 
 # 示例
-data2_str = "ERM+FNAM5Ld/stmSVHZZhleCCIMbI/qszUwuQxScROi1hILgVpQBVJG0dB3u3xz2/WT3yIMiy7PagPfl1DTLL656w70wG3FzrcaTkoT5omrShfu4iWnaXW+E68rAuSemKj11pm72XhlMacJTtVoJdmcG8ILKIbyp4zCwHMfo/Po=VdQiXJJh4ETkwuyNqQXT+gCzXatZDFNu3Giyub0FkMY9bMaJDNhWw/7nB4XAzZNZtTnYPr1FsxGRzYgg1tsbrE9mWum2c08D"
+data2_str = "C86ueUEXc0RjAJ1u8zBMv9A8yzd9pU28TtGf8sz0Qc0xphCnVnlvutRLWanWoLOPjIvrEQZBxq+PsTEB+Om9p3iGHFenwcp0yBuoSlZ0y/7j4FSzRHeXCZYmqcDHA8POj7Vt0Z0PpTXOwwCiv/XT/cBTHbTIAfD4EoQcjIQSGI8=2DKwmieUrnM+CbTu3wFO2b91eV2O7nAXE1VfbGF5HLSthaE5AXjBwHd6tUUHoNFtMRyrvEalTSCpD5/tIUFwWR3YEKQvsFWuCWLMBK1ohnKUqiZiaqHEnXaOzz6ngjQ9Y66t+m8EpckUDM7Sqsa9dblaukxs2UV8IFgz/GAf8ABrzh3rU2CADkYfdYHMqU7Y"
 print(decrypt_data2(data2_str))

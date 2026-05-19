@@ -116,7 +116,7 @@ export async function getGreenTravelCode(userId, sesId) {
   // 2. 获取乘车码
   const result = await getQrCode(token)
   if (!result || result.respCode !== '00') {
-    throw new Error(result.respDesc || '获取乘车码失败')
+    throw new Error(result?.respDesc || '获取乘车码失败')
   }
 
   // 3. 后台记录访问
@@ -124,3 +124,43 @@ export async function getGreenTravelCode(userId, sesId) {
 
   return result.data
 }
+
+// OL83 - 地铁优惠券查询
+// @param {string} loginName - 登录名 / 用户 ID
+// @param {string} sesId - 会话 ID
+// @returns {Promise<Object>} 返回优惠券统计与列表
+export async function getSubwayTicketRecords(loginName, sesId) {
+  if (!loginName || !sesId) {
+    throw new Error('login_name 和 ses_id 不能为空')
+  }
+
+  const payload = buildEncryptedPayload({
+    channel: CHANNEL,
+    app_ver_no: APP_VER_NO,
+    timestamp: nowTs(),
+    login_name: loginName,
+    user_id: loginName,
+    ses_id: sesId,
+    use_state: '1',
+    award_type: '1',
+    page_size: 10,
+    page_num: 1
+  })
+
+  const response = await postJson(ENDPOINTS.subwayTickets, payload)
+  if (!response || !response.data2) {
+    throw new Error('OL83 接口返回缺少 data2')
+  }
+
+  try {
+    const plain = decryptData2(response.data2)
+    const data = JSON.parse(plain)
+    if (data.result !== '0') {
+      throw new Error(data.msg || '查询地铁优惠券失败')
+    }
+    return data
+  } catch (error) {
+    throw new Error(`OL83 响应解密失败: ${error.message || error}`)
+  }
+}
+

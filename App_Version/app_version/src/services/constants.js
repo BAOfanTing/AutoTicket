@@ -13,7 +13,8 @@ export const ENDPOINTS = {
   signin: '/unionApp/interf/front/U/U042',
   comment: '/unionApp/interf/front/AC/AC08',
   query: '/unionApp/interf/front/U/U005',
-  exchange: '/unionApp/interf/front/OL/OL41'
+  exchange: '/unionApp/interf/front/OL/OL41',
+  subwayTickets: '/unionApp/interf/front/OL/OL83'
 }
 
 // 小程序端请求头（不能手动设置 User-Agent / Host / Connection）
