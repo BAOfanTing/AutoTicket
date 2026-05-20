@@ -20,11 +20,12 @@ import hashlib
 # 清除 HTTPS 警告，避免自签名证书报错
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
+from constants import BASE_URL, ENDPOINTS
+
 # ================= 1. 密钥配置区域 =================
 # 以下为与 App 服务端通信所需的加密密钥、签名密钥及应用配置参数
 CHANNEL = "02"
 APP_VER_NO = "3.1.7"
-BASE_URL = 'https://app.hzgh.org.cn'
 
 ENCRYPTION_PUBLIC_KEY_PEM = """-----BEGIN PUBLIC KEY-----
 MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC7yWoQaojBBqKI2H0j4e8ZeX/n1yip6hxrxSVth5F5n1JJ/B3liPMdz6K1chNLFTAcbI7hTL9KkphP9yQ+bPYD68Ajrt/DFrW679Zi1CoeetHVrM4sF68lYarGXwnSlKloaPWnI4Ch9cSqIvIOInlpeJqYPlJ8ZJvGCmbQoM6bewIDAQAB
@@ -168,7 +169,7 @@ def get_captcha_u067():
     payload["key"] = ",".join(keys_for_sign)
     payload["sign"] = rsa_sha256_sign(SIGNING_PRIVATE_KEY_PEM, string_to_sign)
 
-    url = BASE_URL + "/unionApp/interf/front/U/U067"
+    url = BASE_URL + ENDPOINTS['captcha']
     print(f"[*] 正在请求 U067 获取验证码...")
     resp = session.post(url, json=payload, verify=False)
 
@@ -249,7 +250,7 @@ def send_sms(captcha_data, phone, img_auth_code, sms_type="10"):
     payload["key"] = ",".join(keys_for_sign)
     payload["sign"] = rsa_sha256_sign(SIGNING_PRIVATE_KEY_PEM, string_to_sign)
 
-    url = BASE_URL + "/unionApp/interf/front/SMS/SMS1"
+    url = BASE_URL + ENDPOINTS['smsSend']
     print(f"\n[*] 正在请求 SMS/SMS1 发送短信验证码...")
     resp = session.post(url, json=payload, verify=False)
 
@@ -317,7 +318,7 @@ def login_u065(phone, auth_code):
     payload["key"] = ",".join(keys_for_sign)
     payload["sign"] = rsa_sha256_sign(SIGNING_PRIVATE_KEY_PEM, string_to_sign)
 
-    url = BASE_URL + "/unionApp/interf/front/U/U065"
+    url = BASE_URL + ENDPOINTS['smsLogin']
     print(f"\n[*] 正在提交 U065 短信验证码登录...")
     resp = session.post(url, json=payload, verify=False)
 
@@ -379,7 +380,7 @@ def get_qr_token(user_id_plain, ses_id):
     payload["key"] = ",".join(keys_for_sign)
     payload["sign"] = rsa_sha256_sign(SIGNING_PRIVATE_KEY_PEM, string_to_sign)
 
-    url = BASE_URL + "/unionApp/interf/front/OL/OL82"
+    url = BASE_URL + ENDPOINTS['qrToken']
     print(f"\n[*] 正在请求 OL82 获取绿色出行码 token...")
     resp = session.post(url, json=payload, verify=False)
 
@@ -438,7 +439,7 @@ def record_qr_visit(user_id_plain):
     payload["key"] = ",".join(keys_for_sign)
     payload["sign"] = rsa_sha256_sign(SIGNING_PRIVATE_KEY_PEM, string_to_sign)
 
-    url = BASE_URL + "/unionApp/interf/front/OP/OP80"
+    url = BASE_URL + ENDPOINTS['qrVisit']
     print(f"\n[*] 正在请求 OP80 记录访问...")
     resp = session.post(url, json=payload, verify=False)
 
@@ -504,13 +505,14 @@ def get_qr_code(token):
         return None
 
 
-def get_subway_ticket_records(login_name, ses_id):
+def get_subway_ticket_records(login_name, ses_id, award_type="1"):
     """
     请求 OL83 接口，查询地铁优惠券统计与记录列表。
 
     参数:
         login_name (str): 登录名 / 用户 ID
         ses_id (str): 会话 ID
+        award_type (str): 券类型，1=2元，2=4元，3=6元
 
     返回:
         dict: 解密后的 OL83 响应数据，失败返回 None
@@ -526,7 +528,7 @@ def get_subway_ticket_records(login_name, ses_id):
         "user_id": login_name,
         "ses_id": ses_id,
         "use_state": "1",
-        "award_type": "1",
+        "award_type": str(award_type),
         "page_size": 10,
         "page_num": 1
     }
@@ -546,7 +548,7 @@ def get_subway_ticket_records(login_name, ses_id):
     payload["key"] = ",".join(keys_for_sign)
     payload["sign"] = rsa_sha256_sign(SIGNING_PRIVATE_KEY_PEM, string_to_sign)
 
-    url = BASE_URL + "/unionApp/interf/front/OL/OL83"
+    url = BASE_URL + ENDPOINTS['subwayTickets']
     print(f"\n[*] 正在请求 OL83 查询地铁优惠券...")
     resp = session.post(url, json=payload, verify=False)
 
@@ -562,6 +564,59 @@ def get_subway_ticket_records(login_name, ses_id):
         return None
     except Exception as e:
         print(f"[-] OL83 请求解密失败: {e}")
+        return None
+
+
+def query_user_info(login_name, ses_id):
+    """
+    请求 U005 接口，查询用户信息（积分、等级、姓名等），
+    用于验证登录状态是否仍然有效。若返回 result 不为 "0" 则说明 ses_id 已失效。
+
+    参数:
+        login_name (str): 登录名
+        ses_id (str): 会话 ID
+
+    返回:
+        dict: 包含 name/sensitive_name/remain_integral/total_integral 等的用户信息字典，
+              若请求失败或 ses_id 已失效则返回 None
+    """
+    if not login_name or not ses_id:
+        return None
+
+    payload = {
+        "channel": CHANNEL,
+        "app_ver_no": APP_VER_NO,
+        "timestamp": str(int(time.time() * 1000)),
+        "login_name": login_name,
+        "ses_id": ses_id
+    }
+
+    m = rand_str(24).upper()
+    payload["dec_key"] = rsa_encrypt(ENCRYPTION_PUBLIC_KEY_PEM, m)
+
+    encrypt_keys = ["login_name"]
+    for k in encrypt_keys:
+        if k in payload:
+            payload[k] = des3_ecb_pkcs7_encrypt(m, payload[k])
+
+    keys_for_sign = list(payload.keys())
+    values_for_sign = [str(v) for v in payload.values()]
+    values_concat = "".join(values_for_sign)
+    string_to_sign = values_concat + SIGN_KEY_NEW
+    payload["key"] = ",".join(keys_for_sign)
+    payload["sign"] = rsa_sha256_sign(SIGNING_PRIVATE_KEY_PEM, string_to_sign)
+
+    url = BASE_URL + ENDPOINTS['query']
+    try:
+        resp = session.post(url, json=payload, verify=False)
+        resp_json = resp.json()
+        if "data2" in resp_json:
+            decrypted_json_str = decrypt_data2(resp_json["data2"])
+            data_dict = json.loads(decrypted_json_str)
+            if data_dict.get("result") == "0":
+                return data_dict
+        return None
+    except Exception:
         return None
 
 
@@ -674,7 +729,7 @@ def login_u004_with_code(captcha_data, phone, password, img_auth_code):
     payload["key"] = ",".join(keys_for_sign)
     payload["sign"] = rsa_sha256_sign(SIGNING_PRIVATE_KEY_PEM, string_to_sign)
 
-    url = BASE_URL + "/unionApp/interf/front/U/U004"
+    url = BASE_URL + ENDPOINTS['login']
     print(f"\n[*] 正在提交 U004 登录请求...")
     resp = session.post(url, json=payload, verify=False)
 

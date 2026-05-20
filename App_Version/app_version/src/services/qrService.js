@@ -128,8 +128,9 @@ export async function getGreenTravelCode(userId, sesId) {
 // OL83 - 地铁优惠券查询
 // @param {string} loginName - 登录名 / 用户 ID
 // @param {string} sesId - 会话 ID
+// @param {string} awardType - 券类型：1=2元，2=4元，3=6元
 // @returns {Promise<Object>} 返回优惠券统计与列表
-export async function getSubwayTicketRecords(loginName, sesId) {
+export async function getSubwayTicketRecords(loginName, sesId, awardType = '1') {
   if (!loginName || !sesId) {
     throw new Error('login_name 和 ses_id 不能为空')
   }
@@ -142,7 +143,7 @@ export async function getSubwayTicketRecords(loginName, sesId) {
     user_id: loginName,
     ses_id: sesId,
     use_state: '1',
-    award_type: '1',
+    award_type: awardType,
     page_size: 10,
     page_num: 1
   })

@@ -11,6 +11,9 @@
         <text class="label">登录状态</text>
         <text :class="isLoggedIn ? 'ok' : 'bad'">{{ isLoggedIn ? '已登录' : '未登录' }}</text>
       </view>
+      <view class="row small" v-if="userName">
+        <text>当前用户: {{ userName }}</text>
+      </view>
       <view class="row small" v-if="isLoggedIn">
         <text>login_name: {{ form.loginName }}</text>
       </view>
@@ -84,10 +87,13 @@ import { onLoad } from '@dcloudio/uni-app'
 import { runDailyTaskWorkflow, runExchangeOnce } from '../../src/services/taskService'
 import { clearAuth, loadAuth, loadConfig, saveAuth, saveConfig } from '../../src/utils/storage'
 import { formatDateTime, getNextRunTime, parseDateTime } from '../../src/utils/time'
+import { queryUserInfo } from '../../src/services/authService'
 
 // ==================== 响应式状态定义 ====================
 /** 是否正在执行兑换任务循环 */
 const running = ref(false)
+/** 当前登录用户姓名 */
+const userName = ref('')
 /** 是否正在执行每日任务 */
 const dailyTaskRunning = ref(false)
 /** 是否请求停止兑换任务 */
@@ -103,8 +109,8 @@ const form = reactive({
   sesId: '',       // 会话 ID
   exchangeId: '10', // 兑换面额 ID
   runTime: getNextRunTime(), // 定时执行时间
-  runCount: '100',          // 重复执行次数
-  timeSleep: '0.08'         // 每次执行间隔（秒）
+  runCount: '10',          // 重复执行次数
+  timeSleep: '0.3'         // 每次执行间隔（秒）
 })
 
 /** 计算属性：是否已登录（loginName 和 sesId 均不为空） */
@@ -265,7 +271,7 @@ async function runDailyTask() {
  * 页面加载时：从本地存储恢复登录态和配置，
  * 如果未登录则重定向到登录页
  */
-onLoad(() => {
+onLoad(async () => {
   const auth = loadAuth()
   const config = loadConfig()
 
@@ -281,6 +287,28 @@ onLoad(() => {
   form.exchangeId = config.exchangeId || form.exchangeId
   form.runCount = config.runCount || form.runCount
   form.timeSleep = config.timeSleep || form.timeSleep
+
+  // 调用 U005 验证 ses_id 是否仍然有效，同时获取用户姓名
+  const userInfo = await queryUserInfo(form.loginName, form.sesId)
+  if (!userInfo) {
+    appendLog('登录会话已失效，请重新登录')
+    clearAuth()
+    saveAuth({ isLoggedIn: false })
+    uni.showModal({
+      title: '登录已失效',
+      content: '登录会话已失效，请重新登录。',
+      showCancel: false,
+      success() {
+        uni.redirectTo({ url: '/pages/login/login' })
+      }
+    })
+    return
+  }
+
+  userName.value = userInfo.name || userInfo.sensitive_name || ''
+  if (userName.value) {
+    appendLog(`欢迎, ${userName.value}`)
+  }
 
   appendLog('登录状态已恢复')
   persistConfig()

@@ -36,40 +36,40 @@
       <!-- 地铁优惠券查询结果 -->
       <view class="card info-card">
         <view class="title">地铁优惠券</view>
-        <view class="info-row">
-          <text class="info-label">可用张数</text>
-          <text class="info-value">{{ subwayInfo.useNum }}</text>
-        </view>
-        <view class="info-row">
-          <text class="info-label">2元券</text>
+        <view
+          class="info-row coupon-switch"
+          :class="{ active: activeAwardType === '1' }"
+          @click="switchAwardType('1')"
+        >
+          <text class="info-label">2元券当前领取数</text>
           <text class="info-value">{{ subwayInfo.num2 }}</text>
         </view>
-        <view class="info-row">
-          <text class="info-label">4元券</text>
+        <view
+          class="info-row coupon-switch"
+          :class="{ active: activeAwardType === '2' }"
+          @click="switchAwardType('2')"
+        >
+          <text class="info-label">4元券当前领取数</text>
           <text class="info-value">{{ subwayInfo.num4 }}</text>
         </view>
-        <view class="info-row">
-          <text class="info-label">6元券</text>
+        <view
+          class="info-row coupon-switch"
+          :class="{ active: activeAwardType === '3' }"
+          @click="switchAwardType('3')"
+        >
+          <text class="info-label">6元券当前领取数</text>
           <text class="info-value">{{ subwayInfo.num6 }}</text>
-        </view>
-        <view class="info-row">
-          <text class="info-label">即将过期</text>
-          <text class="info-value">{{ subwayInfo.expireNum }}</text>
-        </view>
-        <view class="info-row">
-          <text class="info-label">记录总数</text>
-          <text class="info-value">{{ subwayInfo.totalCount }}</text>
         </view>
 
         <view v-if="subwayInfo.list.length" class="coupon-list">
           <view class="coupon-item" v-for="(item, index) in subwayInfo.list" :key="index">
             <view class="coupon-line">
-              <text class="coupon-label">券信息</text>
-              <text class="coupon-value">{{ item.award_name || item.awardTypeName || item.award_type || '-' }}</text>
+              <text class="coupon-label">券名称</text>
+              <text class="coupon-value">{{ item.exchange_name || item.award_name || item.awardTypeName || item.award_type || '-' }}</text>
             </view>
-            <view class="coupon-line">
-              <text class="coupon-label">状态</text>
-              <text class="coupon-value">{{ item.use_state_name || item.useStateName || item.use_state || '-' }}</text>
+            <view class="coupon-line" v-if="item.create_time || item.createTime">
+              <text class="coupon-label">领取时间</text>
+              <text class="coupon-value">{{ item.create_time || item.createTime }}</text>
             </view>
             <view class="coupon-line" v-if="item.expire_time || item.expireTime">
               <text class="coupon-label">过期时间</text>
@@ -106,14 +106,12 @@ const money = ref('0')
 const cardNo = ref('')
 /** 二维码有效期 */
 const deadline = ref('')
+const activeAwardType = ref('1')
 /** 地铁优惠券查询结果 */
 const subwayInfo = ref({
-  useNum: '0',
   num2: '0',
   num4: '0',
   num6: '0',
-  expireNum: '0',
-  totalCount: '0',
   list: []
 })
 
@@ -137,6 +135,39 @@ function formatDeadtime(ts) {
 }
 
 /**
+ * 获取当前选中券类型的地铁优惠券统计与记录
+ */
+async function fetchSubwayInfo() {
+  const auth = loadAuth()
+  const subwayData = await getSubwayTicketRecords(auth.loginName, auth.sesId, activeAwardType.value)
+
+  subwayInfo.value = {
+    num2: subwayData.num_2 || '0',
+    num4: subwayData.num_4 || '0',
+    num6: subwayData.num_6 || '0',
+    list: Array.isArray(subwayData.list) ? subwayData.list : []
+  }
+}
+
+/**
+ * 切换优惠券类型并重新查询列表
+ */
+async function switchAwardType(type) {
+  if (activeAwardType.value === type) return
+
+  loading.value = true
+  error.value = ''
+  try {
+    activeAwardType.value = type
+    await fetchSubwayInfo()
+  } catch (e) {
+    error.value = e.message || '获取地铁优惠券失败'
+  } finally {
+    loading.value = false
+  }
+}
+
+/**
  * 获取绿色出行二维码并查询地铁优惠券统计
  */
 async function fetchQrCode() {
@@ -150,11 +181,8 @@ async function fetchQrCode() {
   loading.value = true
   error.value = ''
   try {
-    const [qrData, subwayData] = await Promise.all([
-      getGreenTravelCode(auth.loginName, auth.sesId),
-      getSubwayTicketRecords(auth.loginName, auth.sesId)
-    ])
-
+    const qrData = await getGreenTravelCode(auth.loginName, auth.sesId)
+	
     if (!qrData) {
       throw new Error('获取乘车码数据为空')
     }
@@ -173,15 +201,7 @@ async function fetchQrCode() {
     cardNo.value = qrData.trafficCardNo || ''
     deadline.value = formatDeadtime(qrData.deadTime)
 
-    subwayInfo.value = {
-      useNum: subwayData.use_num || '0',
-      num2: subwayData.num_2 || '0',
-      num4: subwayData.num_4 || '0',
-      num6: subwayData.num_6 || '0',
-      expireNum: subwayData.expire_num || '0',
-      totalCount: subwayData.total_count || '0',
-      list: Array.isArray(subwayData.list) ? subwayData.list : []
-    }
+    await fetchSubwayInfo()
   } catch (e) {
     error.value = e.message || '获取绿色出行码失败'
   } finally {
@@ -268,6 +288,20 @@ onMounted(() => {
 
 .info-row:last-child {
   border-bottom: none;
+}
+
+.coupon-switch {
+  transition: all 0.2s ease;
+}
+
+.coupon-switch.active {
+  background: #f0f9f4;
+}
+
+.coupon-switch.active .info-label,
+.coupon-switch.active .info-value {
+  color: #16a34a;
+  font-weight: 700;
 }
 
 .info-label {

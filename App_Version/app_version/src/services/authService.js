@@ -243,3 +243,37 @@ export async function loginU004WithCode(captchaData, phone, password, imgAuthCod
     throw new Error(`登录响应解密失败: ${error.message || error}`)
   }
 }
+
+// U005 - 查询用户信息（积分、等级、姓名等），用于验证登录状态是否仍有效
+// @param {string} loginName - 登录名
+// @param {string} sesId - 会话 ID
+// @returns {Promise<Object|null>} 返回用户信息（含 name/sensitive_name），失效返回 null
+export async function queryUserInfo(loginName, sesId) {
+  if (!loginName || !sesId) {
+    return null
+  }
+
+  const payload = buildEncryptedPayload({
+    channel: CHANNEL,
+    app_ver_no: APP_VER_NO,
+    timestamp: nowTs(),
+    login_name: loginName,
+    ses_id: sesId
+  })
+
+  const response = await postJson(ENDPOINTS.query, payload)
+  if (!response || !response.data2) {
+    return null
+  }
+
+  try {
+    const plain = decryptData2(response.data2)
+    const parsed = JSON.parse(plain)
+    if (parsed.result !== '0') {
+      return null
+    }
+    return parsed
+  } catch {
+    return null
+  }
+}

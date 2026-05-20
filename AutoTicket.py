@@ -23,24 +23,17 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # ================= 配置区域 =================
 # 以下为 App 服务端通信所需的参数、密钥和运行时配置
 CHANNEL = "02"
-APP_VER_NO = "3.1.6"
+APP_VER_NO = "3.1.7"
 SES_ID = ""
 LOGIN_NAME_PLAINTEXT = ""
 USER_ID_PLAINTEXT = ""
 EXCHANGE_ID_PLAINTEXT = "10"   #9是2块,10是4块,11是6块
 RUN_TIME = datetime(2025, 9, 9, 17, 00, 0, 300000)  # 2025-08-16 06:59:59.900
-RUN_COUNT = 100   # 运行次数
-timeSleep = 0.08  # 请求间隔   0.05 = 0.05秒发送一次
+RUN_COUNT = 10   # 运行次数
+timeSleep = 0.3  # 请求间隔   0.3 = 0.3秒发送一次
 
-# API 端点配置（从 JavaScript 版本的 workflow_config.js 翻译而来）
-BASE_URL = 'https://app.hzgh.org.cn'
-ENDPOINTS = {
-    'login': '/unionApp/interf/front/U/U042',
-    'signin': '/unionApp/interf/front/U/U042',
-    'comment': '/unionApp/interf/front/AC/AC08',
-    'query': '/unionApp/interf/front/U/U005',
-    'exchange': '/unionApp/interf/front/OL/OL41'  # 兑换优惠券接口
-}
+# API 端点配置（从 constants.py 导入）
+from constants import BASE_URL, ENDPOINTS
 # ============================================================
 
 # 【密钥1】用于 3DES 密钥传输加密的 RSA 公钥
@@ -77,7 +70,7 @@ NO_SIGN_KEYS = [
 ]
 
 # 兑换接口完整 URL
-URL = "https://app.hzgh.org.cn/unionApp/interf/front/OL/OL41"
+URL = BASE_URL + ENDPOINTS['exchange']
 
 # ============================================================
 
@@ -266,6 +259,7 @@ def log_print(*args, **kwargs):
 # ================== 兑换任务 ==================
 def run_exchange():
     """执行一次兑换操作：构造加密请求 → 发起 POST → 解密并打印响应"""
+    payload = build_payload()
     resp = session.post(URL, json=payload, verify=False)
 
     try:
@@ -343,7 +337,7 @@ def daily_task_login():
     payload["sign"] = sign
 
     # 使用登录端点URL
-    login_url = BASE_URL + ENDPOINTS['login']
+    login_url = BASE_URL + ENDPOINTS['dailyLogin']
     resp = session.post(login_url, json=payload, verify=False)
     try:
         resp_json = resp.json()

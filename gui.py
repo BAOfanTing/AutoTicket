@@ -320,21 +320,24 @@ class LoginDialog(QDialog):
 
 
 class QRCodeDialog(QDialog):
-    """绿色出行码展示对话框，显示服务端渲染的二维码图片及余额、卡号、有效期和优惠券统计信息"""
+    """绿色出行码展示对话框，显示服务端渲染的二维码图片及余额、卡号、有效期和优惠券信息"""
 
-    def __init__(self, qrcode_image, money, card_no, deadline, subway_info=None, parent=None):
+    def __init__(self, qrcode_image, money, card_no, deadline, login_name, ses_id, subway_info=None, parent=None):
         super().__init__(parent)
         self.setWindowTitle("绿色出行码")
         self.setModal(True)
         self.setMinimumWidth(420)
         self.setMinimumHeight(640)
 
-        subway_info = subway_info or {}
+        self.login_name = login_name
+        self.ses_id = ses_id
+        self.current_award_type = "1"
+        self.subway_info = subway_info or {}
+        self.coupon_buttons = {}
 
         layout = QVBoxLayout()
         layout.setAlignment(Qt.AlignCenter)
 
-        # 解码服务端返回的 base64 图片
         if qrcode_image.startswith('data:image'):
             qrcode_image = qrcode_image.split(',', 1)[1]
         img_bytes = base64.b64decode(qrcode_image)
@@ -379,19 +382,27 @@ class QRCodeDialog(QDialog):
         coupon_title.setStyleSheet("font-size: 18px; font-weight: 700; color: #1d1d1f;")
         coupon_layout.addWidget(coupon_title)
 
-        coupon_rows = [
-            ("已使用张数", subway_info.get("use_num", "0")),
-            ("2元券数量", subway_info.get("num_2", "0")),
-            ("4元券数量", subway_info.get("num_4", "0")),
-            ("6元券数量", subway_info.get("num_6", "0")),
-            ("已过期张数", subway_info.get("expire_num", "0")),
+        switch_layout = QHBoxLayout()
+        switch_layout.setSpacing(8)
+        button_configs = [
+            ("1", "2元券"),
+            ("2", "4元券"),
+            ("3", "6元券")
         ]
+        for award_type, button_text in button_configs:
+            button = QPushButton(button_text)
+            button.setCheckable(True)
+            button.setMinimumHeight(38)
+            button.clicked.connect(lambda checked, t=award_type: self.switch_award_type(t))
+            self.coupon_buttons[award_type] = button
+            switch_layout.addWidget(button)
+        coupon_layout.addLayout(switch_layout)
 
-        for label_text, value_text in coupon_rows:
-            row_label = QLabel(f"{label_text}: {value_text}")
-            row_label.setAlignment(Qt.AlignCenter)
-            row_label.setStyleSheet("font-size: 14px; color: #3a3a3c;")
-            coupon_layout.addWidget(row_label)
+        self.coupon_content_frame = QFrame()
+        self.coupon_content_frame.setStyleSheet("QFrame { background: transparent; }")
+        self.coupon_content_layout = QVBoxLayout(self.coupon_content_frame)
+        self.coupon_content_layout.setSpacing(6)
+        coupon_layout.addWidget(self.coupon_content_frame)
 
         close_btn = QPushButton("关闭")
         close_btn.setMinimumHeight(44)
@@ -406,6 +417,92 @@ class QRCodeDialog(QDialog):
         layout.addWidget(coupon_frame)
         layout.addWidget(close_btn)
         self.setLayout(layout)
+
+        self.refresh_coupon_area()
+        self.update_coupon_button_styles()
+
+    def update_coupon_button_styles(self):
+        for award_type, button in self.coupon_buttons.items():
+            is_active = award_type == self.current_award_type
+            button.setChecked(is_active)
+            if is_active:
+                button.setStyleSheet(
+                    "QPushButton { background: #1f9d55; color: #ffffff; border: 1px solid #1f9d55; border-radius: 8px; font-weight: 600; }"
+                )
+            else:
+                button.setStyleSheet(
+                    "QPushButton { background: #ffffff; color: #3a3a3c; border: 1px solid #d2d2d7; border-radius: 8px; font-weight: 600; }"
+                )
+
+    def clear_coupon_content(self):
+        while self.coupon_content_layout.count():
+            item = self.coupon_content_layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
+
+    def refresh_coupon_area(self):
+        self.clear_coupon_content()
+
+        coupon_rows = [
+            ("2元券当前领取数", self.subway_info.get("num_2", "0")),
+            ("4元券当前领取数", self.subway_info.get("num_4", "0")),
+            ("6元券当前领取数", self.subway_info.get("num_6", "0")),
+        ]
+
+        for label_text, value_text in coupon_rows:
+            row_label = QLabel(f"{label_text}: {value_text}")
+            row_label.setAlignment(Qt.AlignCenter)
+            row_label.setStyleSheet("font-size: 14px; color: #3a3a3c;")
+            self.coupon_content_layout.addWidget(row_label)
+
+        coupon_list = self.subway_info.get("list") if isinstance(self.subway_info.get("list"), list) else []
+        if coupon_list:
+            for item in coupon_list:
+                exchange_name = item.get("exchange_name") or item.get("award_name") or item.get("award_type") or "-"
+                create_time = item.get("create_time") or item.get("createTime") or "-"
+                expire_time = item.get("expire_time") or item.get("expireTime") or "-"
+                self.coupon_content_layout.addWidget(self._build_coupon_detail(exchange_name, create_time, expire_time))
+        else:
+            empty_label = QLabel("暂无优惠券记录")
+            empty_label.setAlignment(Qt.AlignCenter)
+            empty_label.setStyleSheet("font-size: 14px; color: #6e6e73;")
+            self.coupon_content_layout.addWidget(empty_label)
+
+    def switch_award_type(self, award_type):
+        if self.current_award_type == award_type:
+            return
+
+        self.current_award_type = award_type
+        try:
+            result = Login.get_subway_ticket_records(self.login_name, self.ses_id, award_type)
+            if result and result.get("result") == "0":
+                self.subway_info = result
+            else:
+                self.subway_info = {"list": []}
+        except Exception:
+            self.subway_info = {"list": []}
+
+        self.refresh_coupon_area()
+        self.update_coupon_button_styles()
+
+    def _build_coupon_detail(self, exchange_name, create_time, expire_time):
+        detail_frame = QFrame()
+        detail_frame.setStyleSheet("QFrame { background: #ffffff; border-radius: 10px; padding: 8px; }")
+        detail_layout = QVBoxLayout(detail_frame)
+        detail_layout.setSpacing(4)
+
+        name_label = QLabel(f"券名称: {exchange_name}")
+        name_label.setStyleSheet("font-size: 14px; color: #1d1d1f;")
+        time_label = QLabel(f"领取时间: {create_time}")
+        time_label.setStyleSheet("font-size: 13px; color: #6e6e73;")
+        expire_label = QLabel(f"过期时间: {expire_time}")
+        expire_label.setStyleSheet("font-size: 13px; color: #6e6e73;")
+
+        detail_layout.addWidget(name_label)
+        detail_layout.addWidget(time_label)
+        detail_layout.addWidget(expire_label)
+        return detail_frame
 
 
 class Worker(QThread):
@@ -518,6 +615,7 @@ class MainWindow(QWidget):
         self.loading_config = False
         self.is_logged_in = False
         self.user_id = ""
+        self.user_name = ""
         self.init_ui()
         self.load_config()
 
@@ -534,8 +632,10 @@ class MainWindow(QWidget):
 
         # 创建顶部登录状态区域
         auth_group = QGroupBox("登录")
+        auth_outer_layout = QVBoxLayout()
+        auth_outer_layout.setContentsMargins(20, 20, 20, 20)
+        auth_outer_layout.setSpacing(4)
         auth_layout = QHBoxLayout()
-        auth_layout.setContentsMargins(20, 20, 20, 20)
         auth_layout.setSpacing(12)
         self.login_status_label = QLabel()
         self.login_button = QPushButton("登录")
@@ -545,10 +645,15 @@ class MainWindow(QWidget):
         self.login_button.setMinimumHeight(48)
         self.logout_button.setMinimumHeight(48)
         auth_layout.addWidget(QLabel("登录状态"))
-        auth_layout.addWidget(self.login_status_label, 1)
+        auth_layout.addWidget(self.login_status_label)
+        self.user_name_label = QLabel("")
+        self.user_name_label.setStyleSheet("font-size: 13px; color: #6e6e73;")
+        self.user_name_label.setVisible(False)
+        auth_layout.addWidget(self.user_name_label, 1)
         auth_layout.addWidget(self.login_button)
         auth_layout.addWidget(self.logout_button)
-        auth_group.setLayout(auth_layout)
+        auth_outer_layout.addLayout(auth_layout)
+        auth_group.setLayout(auth_outer_layout)
 
         # 创建配置区域
         config_group = QGroupBox("配置参数")
@@ -667,20 +772,63 @@ class MainWindow(QWidget):
         """判断当前是否处于有效登录状态（已登录且表单中有 login_name 和 ses_id）"""
         return self.is_logged_in and bool(self.login_name_edit.text().strip()) and bool(self.ses_id_edit.text().strip())
 
+    def verify_session(self):
+        """调用 U005 验证当前 ses_id 是否仍有效，若失效则清除登录状态。"""
+        login_name = self.login_name_edit.text().strip()
+        ses_id = self.ses_id_edit.text().strip()
+        if not login_name or not ses_id:
+            return False
+
+        try:
+            user_info = Login.query_user_info(login_name, ses_id)
+            if user_info and user_info.get("result") == "0":
+                name = user_info.get("name") or user_info.get("sensitive_name", "")
+                if name:
+                    self.user_name = name
+                self.refresh_login_state()
+                return True
+            else:
+                self.update_log("登录会话已失效，请重新登录")
+                self._clear_login_state()
+                self.refresh_login_state()
+                QMessageBox.warning(self, "登录已失效", "登录会话已失效，请重新登录。")
+                return False
+        except Exception as e:
+            self.update_log(f"验证登录状态时出错: {e}")
+            self._clear_login_state()
+            self.refresh_login_state()
+            QMessageBox.warning(self, "登录已失效", "验证登录状态时出错，请重新登录。")
+            return False
+
+    def _clear_login_state(self):
+        """清除内部登录状态但不触发界面刷新，供内部调用"""
+        self.is_logged_in = False
+        self.user_id = ""
+        self.user_name = ""
+        AutoTicket.LOGIN_NAME_PLAINTEXT = ""
+        AutoTicket.USER_ID_PLAINTEXT = ""
+        AutoTicket.SES_ID = ""
+
     def refresh_login_state(self):
-        """根据登录状态更新界面 UI：按钮启用/禁用、状态标签文字和颜色"""
+        """根据登录状态更新界面 UI：按钮启用/禁用、状态标签文字和颜色，显示用户姓名"""
         if self.has_valid_login():
             self.login_status_label.setText("已登录")
             self.login_status_label.setStyleSheet("color: #1f9d55; font-weight: 700;")
             self.logout_button.setEnabled(True)
             self.start_button.setEnabled(True)
             self.qr_code_button.setEnabled(True)
+            if self.user_name:
+                self.user_name_label.setText(f"当前用户: {self.user_name}")
+                self.user_name_label.setVisible(True)
+            else:
+                self.user_name_label.setVisible(False)
         else:
             self.login_status_label.setText("未登录")
             self.login_status_label.setStyleSheet("color: #d93025; font-weight: 700;")
             self.logout_button.setEnabled(False)
             self.start_button.setEnabled(False)
             self.qr_code_button.setEnabled(False)
+            self.user_name_label.setVisible(False)
 
     def login(self):
         """弹出登录对话框，完成验证码获取→用户输入→登录提交→自动回填信息的完整流程"""
@@ -743,6 +891,18 @@ class MainWindow(QWidget):
             self.login_name_edit.setText(login_name)
             self.ses_id_edit.setText(ses_id)
             self.save_config()
+
+            # 登录成功后立即查询用户信息，获取真实姓名
+            try:
+                user_info = Login.query_user_info(login_name, ses_id)
+                if user_info and user_info.get("result") == "0":
+                    self.user_name = user_info.get("name") or user_info.get("sensitive_name", "")
+                    self.update_log(f"欢迎, {self.user_name}")
+                else:
+                    self.user_name = ""
+            except Exception:
+                self.user_name = ""
+
             self.refresh_login_state()
             self.update_log("登录成功，已自动填入 login_name 和 ses_id")
             QMessageBox.information(self, "登录成功", "登录成功，已自动填入 login_name 和 ses_id。")
@@ -758,6 +918,7 @@ class MainWindow(QWidget):
 
         self.is_logged_in = False
         self.user_id = ""
+        self.user_name = ""
         self.login_name_edit.clear()
         self.ses_id_edit.clear()
         AutoTicket.LOGIN_NAME_PLAINTEXT = ""
@@ -813,7 +974,7 @@ class MainWindow(QWidget):
             except Exception as subway_error:
                 self.update_log(f"地铁优惠券统计查询失败: {str(subway_error)}")
 
-            dialog = QRCodeDialog(qrcode_image, money, card_no, deadline, subway_info, self)
+            dialog = QRCodeDialog(qrcode_image, money, card_no, deadline, login_name, ses_id, subway_info, self)
             dialog.exec_()
             self.update_log("绿色出行码展示完成")
 
@@ -922,6 +1083,7 @@ class MainWindow(QWidget):
             "login_name": self.login_name_edit.text(),
             "ses_id": self.ses_id_edit.text(),
             "user_id": self.user_id,
+            "user_name": self.user_name,
             "is_logged_in": self.is_logged_in,
             "exchange_id": self.exchange_id_edit.text(),
             "run_count": self.run_count_edit.text(),
@@ -967,6 +1129,7 @@ class MainWindow(QWidget):
                     config = json.load(f)
                 self.user_id = config.get("user_id", "")
                 self.is_logged_in = bool(config.get("is_logged_in"))
+                self.user_name = config.get("user_name", "")
                 if "login_name" in config:
                     self.login_name_edit.setText(config["login_name"])
                 if "ses_id" in config:
@@ -983,7 +1146,12 @@ class MainWindow(QWidget):
         if not self.login_name_edit.text().strip() or not self.ses_id_edit.text().strip():
             self.is_logged_in = False
             self.user_id = ""
+            self.user_name = ""
         self.refresh_login_state()
+
+        # 如果标记已登录，启动后验证 ses_id 是否仍有效
+        if self.is_logged_in and self.login_name_edit.text().strip() and self.ses_id_edit.text().strip():
+            QTimer.singleShot(100, self.verify_session)
 
     def get_next_run_time(self):
         """
