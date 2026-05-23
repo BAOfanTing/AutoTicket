@@ -13,6 +13,7 @@
       </view>
       <view class="row small" v-if="userName">
         <text>当前用户: {{ userName }}</text>
+        <text v-if="remainIntegral > 0" style="color:#1f9d55;">积分: {{ remainIntegral }}</text>
       </view>
       <view class="row small" v-if="isLoggedIn">
         <text>login_name: {{ form.loginName }}</text>
@@ -62,12 +63,19 @@
 
       <!-- 操作按钮组 -->
       <view class="actions">
-        <button class="btn btn-primary" @click="startProgram" :disabled="running || !isLoggedIn">启动</button>
-        <button class="btn btn-danger" @click="stopProgram" :disabled="!running">停止</button>
-        <button class="btn" @click="runDailyTask" :disabled="running || dailyTaskRunning || !isLoggedIn">
-          {{ dailyTaskRunning ? '执行中...' : '执行每日任务' }}
-        </button>
-        <button class="btn btn-qr" @click="goQrCode" :disabled="!isLoggedIn">绿色出行码</button>
+        <view class="action-row">
+          <button class="btn btn-primary flex-1" @click="startProgram" :disabled="running || !isLoggedIn">启动</button>
+          <button class="btn btn-stop flex-1" @click="stopProgram" :disabled="!running">停止</button>
+        </view>
+        <view class="action-row">
+          <button class="btn flex-1" @click="runDailyTask" :disabled="running || dailyTaskRunning || !isLoggedIn">
+            {{ dailyTaskRunning ? '执行中...' : '执行每日任务' }}
+          </button>
+          <button class="btn btn-qr flex-1" @click="goQrCode" :disabled="!isLoggedIn">绿色出行码</button>
+        </view>
+        <view class="action-row">
+          <button class="btn btn-github full" @click="openGithub">GitHub</button>
+        </view>
       </view>
     </view>
 
@@ -94,6 +102,8 @@ import { queryUserInfo } from '../../src/services/authService'
 const running = ref(false)
 /** 当前登录用户姓名 */
 const userName = ref('')
+/** 当前剩余积分 */
+const remainIntegral = ref(0)
 /** 是否正在执行每日任务 */
 const dailyTaskRunning = ref(false)
 /** 是否请求停止兑换任务 */
@@ -240,6 +250,16 @@ function goQrCode() {
   uni.navigateTo({ url: '/pages/qrcode/qrcode' })
 }
 
+/** 打开 GitHub 仓库 */
+function openGithub() {
+  uni.setClipboardData({
+    data: 'https://github.com/BAOfanTing/AutoTicket',
+    success: () => {
+      uni.showToast({ title: 'GitHub 链接已复制', icon: 'none' })
+    }
+  })
+}
+
 /**
  * 执行每日任务工作流
  */
@@ -306,8 +326,9 @@ onLoad(async () => {
   }
 
   userName.value = userInfo.name || userInfo.sensitive_name || ''
+  remainIntegral.value = parseInt(userInfo.remain_integral) || 0
   if (userName.value) {
-    appendLog(`欢迎, ${userName.value}`)
+    appendLog(`欢迎, ${userName.value}  当前积分: ${remainIntegral.value}`)
   }
 
   appendLog('登录状态已恢复')
@@ -402,8 +423,21 @@ watch(form, () => { persistConfig() }, { deep: true })
 
 .actions {
   display: flex;
+  flex-direction: column;
   gap: 12rpx;
-  flex-wrap: wrap;
+}
+
+.action-row {
+  display: flex;
+  gap: 12rpx;
+}
+
+.flex-1 {
+  flex: 1;
+}
+
+.full {
+  width: 100%;
 }
 
 .btn {
@@ -423,8 +457,18 @@ watch(form, () => { persistConfig() }, { deep: true })
   color: #ff3b30;
 }
 
+.btn-stop {
+  background: #ff3b30;
+  color: #fff;
+}
+
 .btn-qr {
   background: #1f9d55;
+  color: #fff;
+}
+
+.btn-github {
+  background: #333;
   color: #fff;
 }
 

@@ -616,6 +616,7 @@ class MainWindow(QWidget):
         self.is_logged_in = False
         self.user_id = ""
         self.user_name = ""
+        self.remain_integral = 0
         self.init_ui()
         self.load_config()
 
@@ -785,6 +786,7 @@ class MainWindow(QWidget):
                 name = user_info.get("name") or user_info.get("sensitive_name", "")
                 if name:
                     self.user_name = name
+                self.remain_integral = int(user_info.get("remain_integral", 0))
                 self.refresh_login_state()
                 return True
             else:
@@ -805,6 +807,7 @@ class MainWindow(QWidget):
         self.is_logged_in = False
         self.user_id = ""
         self.user_name = ""
+        self.remain_integral = 0
         AutoTicket.LOGIN_NAME_PLAINTEXT = ""
         AutoTicket.USER_ID_PLAINTEXT = ""
         AutoTicket.SES_ID = ""
@@ -818,7 +821,10 @@ class MainWindow(QWidget):
             self.start_button.setEnabled(True)
             self.qr_code_button.setEnabled(True)
             if self.user_name:
-                self.user_name_label.setText(f"当前用户: {self.user_name}")
+                text = f"当前用户: {self.user_name}"
+                if self.remain_integral > 0:
+                    text += f"  积分: {self.remain_integral}"
+                self.user_name_label.setText(text)
                 self.user_name_label.setVisible(True)
             else:
                 self.user_name_label.setVisible(False)
@@ -897,11 +903,14 @@ class MainWindow(QWidget):
                 user_info = Login.query_user_info(login_name, ses_id)
                 if user_info and user_info.get("result") == "0":
                     self.user_name = user_info.get("name") or user_info.get("sensitive_name", "")
-                    self.update_log(f"欢迎, {self.user_name}")
+                    self.remain_integral = int(user_info.get("remain_integral", 0))
+                    self.update_log(f"欢迎, {self.user_name}  当前积分: {self.remain_integral}")
                 else:
                     self.user_name = ""
+                    self.remain_integral = 0
             except Exception:
                 self.user_name = ""
+                self.remain_integral = 0
 
             self.refresh_login_state()
             self.update_log("登录成功，已自动填入 login_name 和 ses_id")
@@ -919,6 +928,7 @@ class MainWindow(QWidget):
         self.is_logged_in = False
         self.user_id = ""
         self.user_name = ""
+        self.remain_integral = 0
         self.login_name_edit.clear()
         self.ses_id_edit.clear()
         AutoTicket.LOGIN_NAME_PLAINTEXT = ""
