@@ -30,7 +30,7 @@ USER_ID_PLAINTEXT = ""
 EXCHANGE_ID_PLAINTEXT = "10"   #9是2块,10是4块,11是6块
 RUN_TIME = datetime(2025, 9, 9, 17, 00, 0, 300000)  # 2025-08-16 06:59:59.900
 RUN_COUNT = 10   # 运行次数
-timeSleep = 0.3  # 请求间隔   0.3 = 0.3秒发送一次
+timeSleep = 0.2  # 请求间隔   0.2 = 0.2秒发送一次
 
 # API 端点配置（从 constants.py 导入）
 from constants import BASE_URL, ENDPOINTS

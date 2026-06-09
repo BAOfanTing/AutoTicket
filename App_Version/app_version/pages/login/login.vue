@@ -5,6 +5,9 @@
       <image class="hero-image" src="../../resouse/login.jpg" mode="widthFix" />
     </view>
 
+    <!-- 免责声明 -->
+    <view class="disclaimer">仅供学习使用</view>
+
     <view class="card">
       <view class="title">e家登录</view>
 
@@ -78,6 +81,7 @@
         {{ submitting ? '登录中...' : '登录' }}
       </button>
     </view>
+
   </view>
 </template>
 
@@ -227,6 +231,21 @@ async function handleSendSms() {
  * 登录成功后将 loginName / userId / sesId 保存到本地存储，然后跳转主页
  */
 async function submitLogin() {
+  // 测试账号: admin/admin 直接跳过登录
+  if (loginMode.value === 'password' && phone.value.trim() === 'admin' && password.value === 'admin') {
+    saveAuth({
+      isLoggedIn: true,
+      loginName: 'admin',
+      userId: 'admin',
+      sesId: 'test_ses_id'
+    })
+    uni.showToast({ title: '测试登录成功', icon: 'success' })
+    setTimeout(() => {
+      uni.redirectTo({ url: '/pages/main/main' })
+    }, 300)
+    return
+  }
+
   if (!phone.value) {
     uni.showToast({ title: '请输入手机号', icon: 'none' })
     return
@@ -463,5 +482,12 @@ onLoad(() => {
 
 .btn-sms[disabled] {
   color: #c0c0c0;
+}
+
+.disclaimer {
+  text-align: center;
+  margin-bottom: 20rpx;
+  font-size: 28rpx;
+  color: #999;
 }
 </style>

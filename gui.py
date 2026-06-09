@@ -1014,12 +1014,17 @@ class MainWindow(QWidget):
             return
 
         try:
-            int(run_count)
-            float(time_sleep)
+            count_val = int(run_count)
+            sleep_val = float(time_sleep)
             from datetime import datetime
             datetime.strptime(run_time_str, "%Y-%m-%d %H:%M:%S")
-        except ValueError:
-            QMessageBox.warning(self, "输入错误", "RUN_COUNT 和 timeSleep 必须是数字，RUN_TIME 格式必须正确！")
+            if count_val <= 0 or count_val > 20:
+                raise ValueError("运行次数必须是 1~20 之间的正整数")
+            if sleep_val < 0.15:
+                raise ValueError("运行间隔不能小于 0.15 秒")
+        except ValueError as e:
+            msg = str(e) if "运行" in str(e) else "RUN_COUNT 和 timeSleep 必须是数字，RUN_TIME 格式必须正确！"
+            QMessageBox.warning(self, "输入错误", msg)
             return
 
         self.stop_requested = False

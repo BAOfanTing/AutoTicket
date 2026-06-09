@@ -5,6 +5,9 @@
       <image class="hero-image" src="../../resouse/home.jpg" mode="widthFix" />
     </view>
 
+    <!-- 免责声明 -->
+    <view class="disclaimer">仅供学习使用</view>
+
     <!-- 登录状态卡片 -->
     <view class="card status-card">
       <view class="row">
@@ -14,9 +17,6 @@
       <view class="row small" v-if="userName">
         <text>当前用户: {{ userName }}</text>
         <text v-if="remainIntegral > 0" style="color:#1f9d55;">积分: {{ remainIntegral }}</text>
-      </view>
-      <view class="row small" v-if="isLoggedIn">
-        <text>login_name: {{ form.loginName }}</text>
       </view>
       <button class="btn btn-danger" @click="logout" :disabled="running">退出登录</button>
     </view>
@@ -73,13 +73,8 @@
           </button>
           <button class="btn btn-qr flex-1" @click="goQrCode" :disabled="!isLoggedIn">绿色出行码</button>
         </view>
-        <view class="action-row">
-          <button class="btn btn-github full" @click="openGithub">GitHub</button>
-        </view>
       </view>
     </view>
-
-    <!-- 运行日志面板 -->
     <view class="card">
       <view class="title">运行日志</view>
       <scroll-view scroll-y class="log-box">
@@ -120,7 +115,7 @@ const form = reactive({
   exchangeId: '10', // 兑换面额 ID
   runTime: getNextRunTime(), // 定时执行时间
   runCount: '10',          // 重复执行次数
-  timeSleep: '0.3'         // 每次执行间隔（秒）
+  timeSleep: '0.2'         // 每次执行间隔（秒）
 })
 
 /** 计算属性：是否已登录（loginName 和 sesId 均不为空） */
@@ -169,11 +164,11 @@ function validateInputs() {
 
   const countNum = Number(runCount)
   const sleepNum = Number(timeSleep)
-  if (!Number.isFinite(countNum) || countNum <= 0) {
-    throw new Error('运行次数必须是正数')
+  if (!Number.isFinite(countNum) || countNum <= 0 || countNum > 20) {
+    throw new Error('运行次数必须是 1~20 之间的正整数')
   }
-  if (!Number.isFinite(sleepNum) || sleepNum <= 0) {
-    throw new Error('运行间隔必须是正数')
+  if (!Number.isFinite(sleepNum) || sleepNum < 0.15) {
+    throw new Error('运行间隔不能小于 0.15 秒')
   }
 
   const runDate = parseDateTime(runTime)
@@ -250,16 +245,6 @@ function goQrCode() {
   uni.navigateTo({ url: '/pages/qrcode/qrcode' })
 }
 
-/** 打开 GitHub 仓库 */
-function openGithub() {
-  uni.setClipboardData({
-    data: 'https://github.com/BAOfanTing/AutoTicket',
-    success: () => {
-      uni.showToast({ title: 'GitHub 链接已复制', icon: 'none' })
-    }
-  })
-}
-
 /**
  * 执行每日任务工作流
  */
@@ -306,9 +291,19 @@ onLoad(async () => {
 
   form.exchangeId = config.exchangeId || form.exchangeId
   form.runCount = config.runCount || form.runCount
-  form.timeSleep = config.timeSleep || form.timeSleep
+  form.timeSleep = (config.timeSleep && Number(config.timeSleep) >= 0.15) ? config.timeSleep : form.timeSleep
 
   // 调用 U005 验证 ses_id 是否仍然有效，同时获取用户姓名
+  // 测试账号 admin 跳过验证
+  if (form.loginName === 'admin' && form.sesId === 'test_ses_id') {
+    userName.value = 'admin'
+    remainIntegral.value = 999
+    appendLog('欢迎, 测试管理员  当前积分: 999')
+    appendLog('登录状态已恢复')
+    persistConfig()
+    return
+  }
+
   const userInfo = await queryUserInfo(form.loginName, form.sesId)
   if (!userInfo) {
     appendLog('登录会话已失效，请重新登录')
@@ -486,5 +481,12 @@ watch(form, () => { persistConfig() }, { deep: true })
   line-height: 1.6;
   margin-bottom: 6rpx;
   word-break: break-all;
+}
+
+.disclaimer {
+  text-align: center;
+  margin-bottom: 16rpx;
+  font-size: 28rpx;
+  color: #999;
 }
 </style>

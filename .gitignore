@@ -5,3 +5,4 @@ gui.spec
 config.json
 AutoTicket.spec
 node_modules
+.claude/

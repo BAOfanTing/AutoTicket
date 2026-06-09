@@ -1,7 +1,7 @@
 <div align="center">
   <img src="https://socialify.git.ci/BAOfanTing/AutoTicket/image?description=1&font=Inter&forks=1&language=1&name=1&owner=1&pattern=Plus&stargazers=1&theme=Dark" alt="AutoTicket" />
   <p>
-    <strong>杭工e家 APP 自动化脚本</strong>
+    <strong>e家 APP 自动化脚本</strong>
     <br />
     支持签到 · 评论 · 积分查询 · 优惠券定时兑换
   </p>
@@ -10,10 +10,11 @@
     <a href="#-javascript-版本"><img src="https://img.shields.io/badge/Node.js-14%2B-green?logo=nodedotjs" /></a>
     <a href="#-微信小程序"><img src="https://img.shields.io/badge/WeChat-%E5%B0%8F%E7%A8%8B%E5%BA%8F-07c160?logo=wechat" /></a>
     <a href="#"><img src="https://img.shields.io/badge/%E5%B0%8F%E7%A8%8B%E5%BA%8F-e%E5%AE%B6AutoTicket-07c160" /></a>
-    <a href="#"><img src="https://img.shields.io/badge/version-1.0.9-blue" /></a>
+    <a href="#"><img src="https://img.shields.io/badge/version-1.1.0-blue" /></a>
     <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-yellow" /></a>
   </p>
 </div>
+
 
 ---
 
@@ -35,7 +36,7 @@
 
 ## 📖 项目简介
 
-AutoTicket 是一个针对 **杭工e家 APP** 的自动化脚本集合。通过对 APP 接口的逆向分析，实现了**登录**、**每日签到**、**评论**、**积分查询**和**优惠券定时兑换**等功能的自动化。
+AutoTicket 是一个针对 **e家 APP** 的自动化脚本集合。通过对 APP 接口的逆向分析，实现了**登录**、**每日签到**、**评论**、**积分查询**和**优惠券定时兑换**等功能的自动化。
 
 项目提供 **Python**（图形界面）、**JavaScript**（命令行）和**微信小程序**三种形态，满足不同使用场景。
 
@@ -156,17 +157,15 @@ node AutoTicket.js
 
 ---
 
-### 微信小程序（e家AutoTicket）
+### ~~微信小程序（e家AutoTicket）~~
 
-~~小程序 **e家AutoTicket** 即将上线，可在微信中搜索使用。~~(咕咕咕咕)
+~~小程序 **e家AutoTicket** ，还请低调使用,到时候大家都用不了,为爱发电~~。
 
 使用 HBuilderX 打开 `App_Version/app_version` 目录，运行到微信开发者工具即可。
 
 支持密码登录和短信验证码登录，登录完成后可执行每日任务（签到、评论、积分查询），以及绿色出行码展示。
 
-可以扫码使用体验版
 
-![image-20260519144129253](https://gitee.com/baofanting/image/raw/master/image/20260519144129328.png)
 
 ---
 
@@ -253,6 +252,13 @@ AutoTicket/
 
 ## 📜 更新日志
 
+### v1.1.0 (2026-06-09)
+
+- 新增 **剩余积分展示**（Python GUI / 小程序），登录后显示在用户名旁
+- 运行次数限制为 1~20 次，运行间隔下限设为 0.15 秒
+- 默认运行间隔调整为 0.2 秒
+- 小程序备案,发布,开发流程学习
+
 ### v1.0.9 (2026-05-20)
 
 - 新增 **地铁优惠券查询** 展示（Python GUI / 小程序）
@@ -294,7 +300,7 @@ AutoTicket/
 ## ⚠️ 免责声明
 
 1. **学习用途**：本项目仅供学习和研究 API 逆向技术使用
-2. **合规使用**：请遵守相关法律法规和杭工e家 APP 的使用条款
+2. **合规使用**：请遵守相关法律法规和e家 APP 的使用条款
 3. **使用风险**：因使用本软件造成的任何直接或间接后果，开发者不承担责任
 4. **商业用途**：如他人将本项目用于商业用途或不当用途，由使用者自行承担责任
 5. **开源协议**：本项目基于 **MIT License** 开源
