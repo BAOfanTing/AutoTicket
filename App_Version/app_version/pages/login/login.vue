@@ -80,6 +80,19 @@
       <button class="btn btn-primary" @click="submitLogin" :disabled="submitting">
         {{ submitting ? '登录中...' : '登录' }}
       </button>
+
+      <!-- 用户协议与隐私政策 -->
+      <view class="agreement-row">
+        <checkbox-group @change="onAgreementChange">
+          <checkbox :checked="agreed" value="1" />
+        </checkbox-group>
+        <view class="agreement-text">
+          <text>我已阅读并同意</text>
+          <text class="link" @click="openAgreement('user')">《用户服务协议》</text>
+          <text>和</text>
+          <text class="link" @click="openAgreement('privacy')">《隐私政策》</text>
+        </view>
+      </view>
     </view>
 
   </view>
@@ -117,8 +130,20 @@ const sendingSms = ref(false)
 const smsCountdown = ref(0)
 /** 倒计时定时器句柄 */
 let countdownTimer = null
+/** 是否已同意用户协议与隐私政策 */
+const agreed = ref(false)
 
 // ==================== 方法 ====================
+/** 协议勾选状态变化 */
+function onAgreementChange(e) {
+  agreed.value = e.detail.value.includes('1')
+}
+
+/** 打开协议/隐私政策页面 */
+function openAgreement(type) {
+  uni.navigateTo({ url: `/pages/agreement/agreement?type=${type}` })
+}
+
 /**
  * 初始化页面：检查本地是否有有效登录态，有则直接跳转主页，否则加载验证码
  */
@@ -233,6 +258,10 @@ async function handleSendSms() {
 async function submitLogin() {
   // 测试账号: admin/admin 直接跳过登录
   if (loginMode.value === 'password' && phone.value.trim() === 'admin' && password.value === 'admin') {
+    if (!agreed.value) {
+      uni.showToast({ title: '请先同意用户服务协议和隐私政策', icon: 'none' })
+      return
+    }
     saveAuth({
       isLoggedIn: true,
       loginName: 'admin',
@@ -243,6 +272,11 @@ async function submitLogin() {
     setTimeout(() => {
       uni.redirectTo({ url: '/pages/main/main' })
     }, 300)
+    return
+  }
+
+  if (!agreed.value) {
+    uni.showToast({ title: '请先同意用户服务协议和隐私政策', icon: 'none' })
     return
   }
 
@@ -489,5 +523,22 @@ onLoad(() => {
   margin-bottom: 20rpx;
   font-size: 28rpx;
   color: #999;
+}
+
+.agreement-row {
+  display: flex;
+  align-items: flex-start;
+  margin-top: 20rpx;
+}
+
+.agreement-text {
+  font-size: 24rpx;
+  color: #6e6e73;
+  line-height: 1.5;
+  margin-left: 8rpx;
+}
+
+.link {
+  color: #007aff;
 }
 </style>

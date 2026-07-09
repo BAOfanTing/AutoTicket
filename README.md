@@ -11,6 +11,7 @@
     <a href="#-微信小程序"><img src="https://img.shields.io/badge/WeChat-%E5%B0%8F%E7%A8%8B%E5%BA%8F-07c160?logo=wechat" /></a>
     <a href="#"><img src="https://img.shields.io/badge/%E5%B0%8F%E7%A8%8B%E5%BA%8F-e%E5%AE%B6AutoTicket-07c160" /></a>
     <a href="#"><img src="https://img.shields.io/badge/version-1.1.0-blue" /></a>
+    <a href="https://t.me/+E-y4vr3ucyM0OTVl"><img src="https://img.shields.io/badge/Telegram-交流群-2ca5e0?logo=telegram" /></a>
     <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-yellow" /></a>
   </p>
 </div>
@@ -159,11 +160,11 @@ node AutoTicket.js
 
 ### ~~微信小程序（e家AutoTicket）~~
 
-~~小程序 **e家AutoTicket** ，还请低调使用,到时候大家都用不了,为爱发电~~。
+~~小程序 **e家AutoTicket** ，还请低调使用,为爱发电~~。
 
 使用 HBuilderX 打开 `App_Version/app_version` 目录，运行到微信开发者工具即可。
 
-支持密码登录和短信验证码登录，登录完成后可执行每日任务（签到、评论、积分查询），以及绿色出行码展示。
+支持密码登录和短信验证码登录。登录前需阅读并同意《用户服务协议》及《隐私政策》，登录完成后可执行每日任务（签到、评论、积分查询），以及绿色出行码展示。
 
 
 
@@ -257,7 +258,8 @@ AutoTicket/
 - 新增 **剩余积分展示**（Python GUI / 小程序），登录后显示在用户名旁
 - 运行次数限制为 1~20 次，运行间隔下限设为 0.15 秒
 - 默认运行间隔调整为 0.2 秒
-- 小程序备案,发布,开发流程学习
+- 小程序新增《用户服务协议》及《隐私政策》，登录前需用户授权同意
+- 小程序备案、发布、开发流程学习
 
 ### v1.0.9 (2026-05-20)
 
@@ -313,4 +315,6 @@ AutoTicket/
   <a href="https://github.com/BAOfanTing/AutoTicket">GitHub</a>
   ·
   <a href="https://github.com/BAOfanTing/AutoTicket/issues">Issue</a>
+  ·
+  <a href="https://t.me/+E-y4vr3ucyM0OTVl">Telegram 交流群</a>
 </div>

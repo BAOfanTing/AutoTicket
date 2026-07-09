@@ -17,6 +17,12 @@
       "style": {
         "navigationBarTitleText": "绿色出行码"
       }
+    },
+    {
+      "path": "pages/agreement/agreement",
+      "style": {
+        "navigationBarTitleText": "协议"
+      }
     }
   ],
   "globalStyle": {

@@ -25,18 +25,6 @@
     <view class="card">
       <view class="title">配置参数</view>
 
-      <!-- LOGIN_NAME 输入框 -->
-      <view class="field">
-        <text class="label">LOGIN_NAME / USER_ID</text>
-        <input v-model="form.loginName" class="input" placeholder="请输入 LOGIN_NAME / USER_ID" />
-      </view>
-
-      <!-- SES_ID 输入框 -->
-      <view class="field">
-        <text class="label">SES_ID</text>
-        <input v-model="form.sesId" class="input" placeholder="请输入 SES_ID" />
-      </view>
-
       <!-- 兑换面额选择 -->
       <view class="field">
         <text class="label">EXCHANGE_ID（9=2块 / 10=4块 / 11=6块）</text>

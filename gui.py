@@ -668,14 +668,16 @@ class MainWindow(QWidget):
         self.ses_id_edit = QLineEdit(AutoTicket.SES_ID)
         self.exchange_id_edit = QLineEdit(AutoTicket.EXCHANGE_ID_PLAINTEXT)
 
+        # 登录凭证输入框不在界面上展示，仅用于内部数据回填
+        self.login_name_edit.setVisible(False)
+        self.ses_id_edit.setVisible(False)
+
         # 设置默认时间，但允许用户手动修改
         default_time = self.get_next_run_time()
         self.run_time_edit = QLineEdit(default_time)
         self.run_count_edit = QLineEdit(str(AutoTicket.RUN_COUNT))
         self.time_sleep_edit = QLineEdit(str(AutoTicket.timeSleep))
 
-        self.login_name_edit.setPlaceholderText("请输入 LOGIN_NAME / USER_ID")
-        self.ses_id_edit.setPlaceholderText("请输入 SES_ID")
         self.exchange_id_edit.setPlaceholderText("例如 9 / 10 / 11")
         self.run_time_edit.setPlaceholderText("YYYY-MM-DD HH:MM:SS")
         self.run_count_edit.setPlaceholderText("请输入运行次数")
@@ -691,8 +693,6 @@ class MainWindow(QWidget):
         ]:
             line_edit.setMinimumHeight(46)
 
-        config_layout.addRow(QLabel("LOGIN_NAME / USER_ID"), self.login_name_edit)
-        config_layout.addRow(QLabel("SES_ID"), self.ses_id_edit)
         config_layout.addRow(QLabel("EXCHANGE_ID（9=2块 / 10=4块 / 11=6块）"), self.exchange_id_edit)
         config_layout.addRow(QLabel("抢票时间"), self.run_time_edit)
         config_layout.addRow(QLabel("运行次数"), self.run_count_edit)
