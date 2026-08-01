@@ -10,12 +10,11 @@
     <a href="#-javascript-版本"><img src="https://img.shields.io/badge/Node.js-14%2B-green?logo=nodedotjs" /></a>
     <a href="#-微信小程序"><img src="https://img.shields.io/badge/WeChat-%E5%B0%8F%E7%A8%8B%E5%BA%8F-07c160?logo=wechat" /></a>
     <a href="#"><img src="https://img.shields.io/badge/%E5%B0%8F%E7%A8%8B%E5%BA%8F-e%E5%AE%B6AutoTicket-07c160" /></a>
-    <a href="#"><img src="https://img.shields.io/badge/version-1.1.0-blue" /></a>
+    <a href="#"><img src="https://img.shields.io/badge/version-1.1.1-blue" /></a>
     <a href="https://t.me/+E-y4vr3ucyM0OTVl"><img src="https://img.shields.io/badge/Telegram-交流群-2ca5e0?logo=telegram" /></a>
     <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-yellow" /></a>
   </p>
 </div>
-
 
 ---
 
@@ -166,8 +165,6 @@ node AutoTicket.js
 
 支持密码登录和短信验证码登录。登录前需阅读并同意《用户服务协议》及《隐私政策》，登录完成后可执行每日任务（签到、评论、积分查询），以及绿色出行码展示。
 
-
-
 ---
 
 ## 📁 项目结构
@@ -252,6 +249,13 @@ AutoTicket/
 ---
 
 ## 📜 更新日志
+
+### v1.1.1 (2026-08-01)
+
+- 抢票时间与小程序版一致，改为使用 **服务器时间** 校准
+- 启动时通过查询接口响应头 `Date` 字段同步服务器时间，并用请求往返时间的一半补偿网络延迟
+- 服务器时间同步失败时自动回退到本地时间，不影响正常使用
+- 精简python版本界面
 
 ### v1.1.0 (2026-06-09)
 

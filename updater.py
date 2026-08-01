@@ -11,7 +11,7 @@ import sys
 import os
 
 # 当前版本号
-CURRENT_VERSION = "1.1.0"
+CURRENT_VERSION = "1.1.1"
 
 class UpdateChecker(QThread):
     """

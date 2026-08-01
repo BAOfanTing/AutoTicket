@@ -1,0 +1,1 @@
+pyinstaller --onefile --windowed --icon=./icon.ico -n AutoTicket gui.py

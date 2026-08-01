@@ -4,7 +4,7 @@ gui.py - AutoTicket 图形界面主模块
 """
 
 import sys
-from PyQt5.QtWidgets import (QApplication, QWidget, QLabel, QLineEdit, QPushButton,
+from PyQt5.QtWidgets import (QApplication, QWidget, QLabel, QLineEdit, QComboBox, QPushButton,
                              QTextEdit, QVBoxLayout, QHBoxLayout, QGroupBox, QFormLayout,
                              QMessageBox, QDialog, QDialogButtonBox, QFrame)
 from PyQt5.QtCore import QThread, pyqtSignal, QDateTime, QTimer, Qt
@@ -20,6 +20,9 @@ from PIL import Image
 import io
 import base64
 # pyinstaller --onefile --windowed --icon=./icon.ico -n AutoTicket gui.py
+
+# 下拉框箭头图标路径（打包为 exe 后 __file__ 指向解压目录，均可生效）
+DOWN_ARROW_ICON = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icons", "down-arrow.png").replace("\\", "/")
 
 # 全局样式表：Apple 风格 UI，定义各控件颜色、圆角、字体等外观
 APP_STYLESHEET = """
@@ -64,6 +67,44 @@ QTextEdit {
 QLineEdit:focus,
 QTextEdit:focus {
     border: 1px solid #0a84ff;
+}
+QComboBox {
+    background: #ffffff;
+    border: 1px solid #d2d2d7;
+    border-radius: 12px;
+    padding: 8px 12px;
+    selection-background-color: #0a84ff;
+    selection-color: #ffffff;
+}
+QComboBox:focus {
+    border: 1px solid #0a84ff;
+}
+QComboBox::drop-down {
+    border: none;
+    width: 28px;
+}
+QComboBox::down-arrow {
+    image: url(__DOWN_ARROW_ICON__);
+    width: 12px;
+    height: 8px;
+}
+QComboBox QAbstractItemView {
+    background: #ffffff;
+    border: 1px solid #d2d2d7;
+    border-radius: 10px;
+    padding: 4px;
+    outline: none;
+}
+QComboBox QAbstractItemView::item {
+    padding: 8px 12px;
+    border-radius: 8px;
+}
+QComboBox QAbstractItemView::item:hover {
+    background: #f2f2f5;
+}
+QComboBox QAbstractItemView::item:selected {
+    background: #0a84ff;
+    color: #ffffff;
 }
 QTextEdit#logPanel {
     color: #1d1d1f;
@@ -137,7 +178,7 @@ QPushButton#qrButton:disabled {
     border-color: #b8e0c5;
     color: #ffffff;
 }
-"""
+""".replace("__DOWN_ARROW_ICON__", DOWN_ARROW_ICON)
 
 class LoginDialog(QDialog):
     """登录对话框，支持密码登录和短信验证码登录两种模式"""
@@ -539,8 +580,11 @@ class Worker(QThread):
             AutoTicket.timeSleep = self.time_sleep
 
             self.log_signal.emit(f"程序已启动，将在 {run_time} 执行兑换任务，共执行 {self.run_count} 次。")
+            self.log_signal.emit("正在同步服务器时间...")
 
-            self.wait_until_target(run_time)
+            # 与小程序版一致：同步服务器时间并计算本地偏移，避免本地时钟偏差错过抢票时机
+            offset = AutoTicket.sync_time_offset()
+            self.wait_until_target(run_time, offset)
             if self.running:
                 AutoTicket.job()
         except Exception as e:
@@ -549,12 +593,12 @@ class Worker(QThread):
             AutoTicket.set_log_callback(None)
             self.finished_signal.emit()
 
-    def wait_until_target(self, run_time):
-        """等待直到目标时间，按距离远近动态调整休眠粒度（最远 5 分钟，最近 50 毫秒）"""
-        from datetime import datetime
+    def wait_until_target(self, run_time, offset=0.0):
+        """等待直到目标时间（按服务器时间偏移校正），按距离远近动态调整休眠粒度（最远 5 分钟，最近 50 毫秒）"""
+        from datetime import datetime, timedelta
 
         while self.running:
-            now = datetime.now()
+            now = datetime.now() + timedelta(seconds=offset)
             if now >= run_time:
                 return
 
@@ -653,6 +697,10 @@ class MainWindow(QWidget):
         auth_layout.addWidget(self.user_name_label, 1)
         auth_layout.addWidget(self.login_button)
         auth_layout.addWidget(self.logout_button)
+        # 小程序宣传提示
+        mini_program_label = QLabel("小程序 e家AutoTicket 已上线，手机端即可使用")
+        mini_program_label.setStyleSheet("font-size: 13px; color: #6e6e73;")
+        auth_outer_layout.addWidget(mini_program_label)
         auth_outer_layout.addLayout(auth_layout)
         auth_group.setLayout(auth_outer_layout)
 
@@ -666,7 +714,11 @@ class MainWindow(QWidget):
 
         self.login_name_edit = QLineEdit(AutoTicket.LOGIN_NAME_PLAINTEXT)
         self.ses_id_edit = QLineEdit(AutoTicket.SES_ID)
-        self.exchange_id_edit = QLineEdit(AutoTicket.EXCHANGE_ID_PLAINTEXT)
+        self.exchange_id_edit = QComboBox()
+        self.exchange_id_edit.addItem("2元优惠券", "9")
+        self.exchange_id_edit.addItem("4元优惠券", "10")
+        self.exchange_id_edit.addItem("6元优惠券", "11")
+        self.exchange_id_edit.setCurrentIndex(1)  # 默认4元
 
         # 登录凭证输入框不在界面上展示，仅用于内部数据回填
         self.login_name_edit.setVisible(False)
@@ -678,7 +730,6 @@ class MainWindow(QWidget):
         self.run_count_edit = QLineEdit(str(AutoTicket.RUN_COUNT))
         self.time_sleep_edit = QLineEdit(str(AutoTicket.timeSleep))
 
-        self.exchange_id_edit.setPlaceholderText("例如 9 / 10 / 11")
         self.run_time_edit.setPlaceholderText("YYYY-MM-DD HH:MM:SS")
         self.run_count_edit.setPlaceholderText("请输入运行次数")
         self.time_sleep_edit.setPlaceholderText("请输入运行间隔")
@@ -693,7 +744,7 @@ class MainWindow(QWidget):
         ]:
             line_edit.setMinimumHeight(46)
 
-        config_layout.addRow(QLabel("EXCHANGE_ID（9=2块 / 10=4块 / 11=6块）"), self.exchange_id_edit)
+        config_layout.addRow(QLabel("优惠券面额"), self.exchange_id_edit)
         config_layout.addRow(QLabel("抢票时间"), self.run_time_edit)
         config_layout.addRow(QLabel("运行次数"), self.run_count_edit)
         config_layout.addRow(QLabel("运行间隔"), self.time_sleep_edit)
@@ -759,7 +810,7 @@ class MainWindow(QWidget):
         #输入后保存ses_id和login_name
         self.login_name_edit.textChanged.connect(self.save_config)
         self.ses_id_edit.textChanged.connect(self.save_config)
-        self.exchange_id_edit.textChanged.connect(self.save_config)
+        self.exchange_id_edit.currentIndexChanged.connect(self.save_config)
         self.run_count_edit.textChanged.connect(self.save_config)
         self.time_sleep_edit.textChanged.connect(self.save_config)
 
@@ -1002,7 +1053,7 @@ class MainWindow(QWidget):
         """启动定时兑换任务：校验输入后创建工作线程 Worker 并启动"""
         login_name = self.login_name_edit.text()
         ses_id = self.ses_id_edit.text()
-        exchange_id = self.exchange_id_edit.text()
+        exchange_id = self.exchange_id_edit.currentData()
         run_time_str = self.run_time_edit.text()
         run_count = self.run_count_edit.text()
         time_sleep = self.time_sleep_edit.text()
@@ -1051,7 +1102,7 @@ class MainWindow(QWidget):
         """执行每日任务完整工作流：登录→3次签到→评论→查询积分"""
         login_name = self.login_name_edit.text()
         ses_id = self.ses_id_edit.text()
-        exchange_id = self.exchange_id_edit.text()
+        exchange_id = self.exchange_id_edit.currentData()
         user_id = self.get_current_user_id(login_name)
 
         if not all([login_name, ses_id]):
@@ -1100,7 +1151,7 @@ class MainWindow(QWidget):
             "user_id": self.user_id,
             "user_name": self.user_name,
             "is_logged_in": self.is_logged_in,
-            "exchange_id": self.exchange_id_edit.text(),
+            "exchange_id": self.exchange_id_edit.currentData(),
             "run_count": self.run_count_edit.text(),
             "time_sleep": self.time_sleep_edit.text(),
         }
@@ -1150,7 +1201,10 @@ class MainWindow(QWidget):
                 if "ses_id" in config:
                     self.ses_id_edit.setText(config["ses_id"])
                 if "exchange_id" in config:
-                    self.exchange_id_edit.setText(config["exchange_id"])
+                    value = config["exchange_id"]
+                    index = self.exchange_id_edit.findData(value)
+                    if index >= 0:
+                        self.exchange_id_edit.setCurrentIndex(index)
                 if "run_count" in config:
                     self.run_count_edit.setText(config["run_count"])
                 if "time_sleep" in config:

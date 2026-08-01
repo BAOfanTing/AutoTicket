@@ -8,7 +8,8 @@ import time
 import random
 import string
 import base64
-from datetime import datetime
+from datetime import datetime, timedelta
+from email.utils import parsedate_to_datetime
 import threading
 from Crypto.PublicKey import RSA
 from Crypto.Signature import pkcs1_15
@@ -583,17 +584,103 @@ def daily_task_workflow():
     except Exception as e:
         log_print(f"❌ 每日任务执行失败: {e}")
 
+# ================== 服务器时间同步 ==================
+# 与小程序版一致：通过查询接口响应头 Date 字段获取服务器时间，
+# 用请求往返时间的一半补偿网络延迟，避免本地时钟偏差导致错过抢票时机
+def sync_server_time():
+    """
+    同步服务器时间：向查询接口发送请求，从响应头 Date 字段获取服务器时间。
+
+    返回:
+        float: 服务器时间戳（毫秒，已补偿网络延迟）
+    """
+    payload = {
+        "channel": CHANNEL,
+        "app_ver_no": "3.1.4",  # 使用与JavaScript版本相同的版本号
+        "timestamp": int(time.time() * 1000),
+        "login_name": LOGIN_NAME_PLAINTEXT,
+        "ses_id": SES_ID
+    }
+
+    # 过滤空值
+    filtered_payload = {}
+    for key, value in payload.items():
+        if value is not None and value != "":
+            filtered_payload[key] = value
+        elif isinstance(value, (int, float)) and value == 0:
+            filtered_payload[key] = value
+    payload = filtered_payload
+
+    # 生成并加密3DES密钥
+    m = rand_str(24).upper()
+    dec_key = rsa_encrypt(ENCRYPTION_PUBLIC_KEY_PEM, m)
+    payload["dec_key"] = dec_key
+
+    # 加密指定字段
+    for key in ENCRYPT_KEYS:
+        if key in payload:
+            payload[key] = des3_ecb_pkcs7_encrypt(m, str(payload[key]))
+
+    # 准备签名字段
+    payload_for_signing = payload.copy()
+    for key in NO_SIGN_KEYS:
+        if key in payload_for_signing:
+            del payload_for_signing[key]
+
+    keys_for_sign = list(payload_for_signing.keys())
+    values_for_sign = [str(v) for v in payload_for_signing.values()]
+
+    # 计算RSA签名
+    values_concat = "".join(values_for_sign)
+    string_to_sign = values_concat + SIGN_KEY_NEW
+    sign = rsa_sha256_sign(SIGNING_PRIVATE_KEY_PEM, string_to_sign)
+
+    payload["key"] = ",".join(keys_for_sign)
+    payload["sign"] = sign
+
+    # 发送查询请求并读取响应头 Date 字段
+    query_url = BASE_URL + ENDPOINTS['query']
+    local_start = int(time.time() * 1000)
+    resp = session.post(query_url, json=payload, verify=False)
+    local_end = int(time.time() * 1000)
+
+    date_header = resp.headers.get("Date")
+    if not date_header:
+        raise ValueError("响应头缺少 Date 字段")
+    # parsedate_to_datetime 解析 HTTP 日期，不受本地语言环境影响
+    server_time = parsedate_to_datetime(date_header).timestamp() * 1000
+    # 用请求往返时间的一半作为网络延迟补偿
+    latency = (local_end - local_start) // 2
+    return server_time + latency
+
+def sync_time_offset():
+    """
+    同步服务器时间并计算本地时钟偏移（秒）。
+
+    失败时回退到本地时间（偏移为 0），与小程序版行为一致。
+    """
+    try:
+        server_ms = sync_server_time()
+        offset = (server_ms - int(time.time() * 1000)) / 1000.0
+        log_print(f"服务器时间同步完成，本地偏移: {offset * 1000:+.0f}ms")
+        return offset
+    except Exception as e:
+        log_print(f"服务器时间同步失败，使用本地时间: {e}")
+        return 0.0
+
 # 修改main函数中的print语句
 def main():
-    """主入口：等待目标执行时间，然后启动多线程兑换任务"""
+    """主入口：同步服务器时间，等待目标执行时间，然后启动多线程兑换任务"""
     log_print(f"程序已启动，将在每天{RUN_TIME}执行兑换任务，共执行{RUN_COUNT}次。")
-    wait_until_target()
+    log_print("正在同步服务器时间...")
+    offset = sync_time_offset()
+    wait_until_target(offset)
     job()
 
-def wait_until_target():
-    """阻塞等待直到 RUN_TIME，按剩余时间动态调整检查频率（5 分钟 → 1 分钟 → 30 秒 → 0.5 秒 → 50 毫秒）"""
+def wait_until_target(offset=0.0):
+    """阻塞等待直到 RUN_TIME（按服务器时间偏移校正），按剩余时间动态调整检查频率（5 分钟 → 1 分钟 → 30 秒 → 0.5 秒 → 50 毫秒）"""
     while True:
-        now = datetime.now()
+        now = datetime.now() + timedelta(seconds=offset)
         if now >= RUN_TIME:
             break
         # 控制检查频率到毫秒

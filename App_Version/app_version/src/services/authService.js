@@ -1,7 +1,7 @@
 import md5 from 'crypto-js/md5'
 import { APP_VER_NO, CHANNEL, ENDPOINTS } from './constants'
 import { buildEncryptedPayload, decryptData2 } from './cryptoService'
-import { postJson } from './http'
+import { fetchServerTime, postJson } from './http'
 
 // 获取当前时间戳字符串（毫秒级）
 function nowTs() {
@@ -244,7 +244,28 @@ export async function loginU004WithCode(captchaData, phone, password, imgAuthCod
   }
 }
 
-// U005 - 查询用户信息（积分、等级、姓名等），用于验证登录状态是否仍有效
+// 通过 U005 接口响应头 Date 字段同步服务器时间
+// @returns {Promise<number>} 服务器时间戳（毫秒）
+export async function syncServerTime(loginName, sesId) {
+  if (!loginName || !sesId) {
+    throw new Error('登录信息缺失，无法同步服务器时间')
+  }
+
+  const payload = buildEncryptedPayload({
+    channel: CHANNEL,
+    app_ver_no: APP_VER_NO,
+    timestamp: nowTs(),
+    login_name: loginName,
+    ses_id: sesId
+  })
+
+  const localStart = Date.now()
+  const serverTime = await fetchServerTime(ENDPOINTS.query, payload)
+  const localEnd = Date.now()
+  // 用请求往返时间的一半作为网络延迟补偿
+  const latency = Math.floor((localEnd - localStart) / 2)
+  return serverTime + latency
+}
 // @param {string} loginName - 登录名
 // @param {string} sesId - 会话 ID
 // @returns {Promise<Object|null>} 返回用户信息（含 name/sensitive_name），失效返回 null

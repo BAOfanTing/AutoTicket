@@ -27,8 +27,10 @@
 
       <!-- 兑换面额选择 -->
       <view class="field">
-        <text class="label">EXCHANGE_ID（9=2块 / 10=4块 / 11=6块）</text>
-        <input v-model="form.exchangeId" class="input" placeholder="例如 9 / 10 / 11" />
+        <text class="label">优惠券面额</text>
+        <picker mode="selector" :range="exchangeOptions" range-key="label" :value="exchangeIndex" @change="onExchangeChange">
+          <view class="input picker">{{ exchangeOptions[exchangeIndex].label }}</view>
+        </picker>
       </view>
 
       <!-- 定时抢票时间设置 -->
@@ -78,7 +80,7 @@ import { onLoad } from '@dcloudio/uni-app'
 import { runDailyTaskWorkflow, runExchangeOnce } from '../../src/services/taskService'
 import { clearAuth, loadAuth, loadConfig, saveAuth, saveConfig } from '../../src/utils/storage'
 import { formatDateTime, getNextRunTime, parseDateTime } from '../../src/utils/time'
-import { queryUserInfo } from '../../src/services/authService'
+import { queryUserInfo, syncServerTime } from '../../src/services/authService'
 
 // ==================== 响应式状态定义 ====================
 /** 是否正在执行兑换任务循环 */
@@ -95,6 +97,14 @@ const stopRequested = ref(false)
 const timerId = ref(null)
 /** 运行日志列表，每项为一行日志文本 */
 const logs = ref([])
+/** 优惠券面额选项 */
+const exchangeOptions = [
+  { label: '2元优惠券', value: '9' },
+  { label: '4元优惠券', value: '10' },
+  { label: '6元优惠券', value: '11' }
+]
+/** 当前选中的优惠券面额索引 */
+const exchangeIndex = ref(1)
 /** 配置表单数据 */
 const form = reactive({
   loginName: '',   // 用户登录名
@@ -110,6 +120,12 @@ const form = reactive({
 const isLoggedIn = computed(() => Boolean(form.loginName && form.sesId))
 
 // ==================== 方法 ====================
+/** 优惠券面额切换 */
+function onExchangeChange(e) {
+  exchangeIndex.value = e.detail.value
+  form.exchangeId = exchangeOptions[exchangeIndex.value].value
+}
+
 /** 将当前表单配置持久化到本地存储 */
 function persistConfig() {
   saveConfig({ ...form })
@@ -184,29 +200,38 @@ async function startProgram() {
   try {
     persistConfig()
     const { runCount, timeSleep, runDate } = validateInputs()
-    const now = new Date()
 
     stopRequested.value = false
     running.value = true
+    appendLog('正在同步服务器时间...')
+
+    let offset = 0
+    try {
+      const serverTime = await syncServerTime(form.loginName, form.sesId)
+      offset = serverTime - Date.now()
+      appendLog(`服务器时间同步完成，本地偏移: ${offset > 0 ? '+' : ''}${offset}ms`)
+    } catch (error) {
+      appendLog(`服务器时间同步失败，使用本地时间: ${error.message}`)
+    }
+
     appendLog(`程序已启动，将在 ${form.runTime} 执行兑换任务，共执行 ${runCount} 次`)
 
-    // 计算距离开抢时间的等待毫秒数
-    const waitMs = Math.max(runDate.getTime() - now.getTime(), 0)
+    // 基于服务器时间计算等待毫秒数
+    const waitMs = Math.max(runDate.getTime() - (Date.now() + offset), 0)
     timerId.value = setTimeout(async () => {
       for (let i = 0; i < runCount; i += 1) {
         if (stopRequested.value) break
         appendLog(`准备执行第 ${i + 1} 次兑换请求`)
-        try {
-          await runExchangeOnce({
-            loginName: form.loginName,
-            userId: form.userId || form.loginName,
-            sesId: form.sesId,
-            exchangeId: form.exchangeId,
-            log: appendLog
-          })
-        } catch (error) {
+        // 不等待请求响应，直接连续发起（与 Python 版行为一致）
+        runExchangeOnce({
+          loginName: form.loginName,
+          userId: form.userId || form.loginName,
+          sesId: form.sesId,
+          exchangeId: form.exchangeId,
+          log: appendLog
+        }).catch((error) => {
           appendLog(`兑换请求失败: ${error.message}`)
-        }
+        })
 
         // 非最后一次执行且未停止时，按间隔等待
         if (i < runCount - 1 && !stopRequested.value) {
@@ -277,7 +302,10 @@ onLoad(async () => {
   form.userId = auth.userId || auth.loginName
   form.sesId = auth.sesId
 
-  form.exchangeId = config.exchangeId || form.exchangeId
+  const savedExchangeId = config.exchangeId || form.exchangeId
+  const foundIndex = exchangeOptions.findIndex(item => item.value === savedExchangeId)
+  exchangeIndex.value = foundIndex >= 0 ? foundIndex : 1
+  form.exchangeId = exchangeOptions[exchangeIndex.value].value
   form.runCount = config.runCount || form.runCount
   form.timeSleep = (config.timeSleep && Number(config.timeSleep) >= 0.15) ? config.timeSleep : form.timeSleep
 
@@ -402,6 +430,11 @@ watch(form, () => { persistConfig() }, { deep: true })
   border-radius: 14rpx;
   padding: 0 16rpx;
   box-sizing: border-box;
+}
+
+.picker {
+  display: flex;
+  align-items: center;
 }
 
 .actions {
