@@ -1,7 +1,9 @@
 <template>
   <view class="page">
     <view class="card">
-      <view class="title">{{ title }}</view>
+      <view class="title">
+        <text class="title-text">{{ title }}</text>
+      </view>
       <scroll-view scroll-y class="content-box">
         <view class="section" v-for="(section, idx) in sections" :key="idx">
           <view class="section-title" v-if="section.title">{{ section.title }}</view>
@@ -90,44 +92,66 @@ onLoad((options) => {
 <style scoped>
 .page {
   min-height: 100vh;
-  padding: 20rpx;
+  padding: 24rpx;
   box-sizing: border-box;
-  background: #f5f5f7;
+  background: #f8f9fa;
+  font-family: "Google Sans", "Roboto", -apple-system, "PingFang SC",
+               "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
 }
 
 .card {
   background: #fff;
-  border-radius: 20rpx;
-  padding: 24rpx;
-  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.06);
+  border-radius: 28rpx;
+  padding: 32rpx;
+  box-shadow: 0 1rpx 3rpx rgba(60,64,67,.15), 0 4rpx 8rpx 2rpx rgba(60,64,67,.06);
 }
 
 .title {
-  font-size: 36rpx;
-  font-weight: 700;
-  text-align: center;
-  margin-bottom: 24rpx;
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  margin-bottom: 28rpx;
+  padding-bottom: 24rpx;
+  border-bottom: 1rpx solid #e8eaed;
+}
+
+.title-text {
+  font-size: 34rpx;
+  font-weight: 600;
+  color: #1f1f1f;
+  letter-spacing: 0.3rpx;
 }
 
 .content-box {
-  max-height: calc(100vh - 160rpx);
+  max-height: calc(100vh - 200rpx);
 }
 
 .section {
-  margin-bottom: 24rpx;
+  margin-bottom: 26rpx;
 }
 
 .section-title {
-  font-size: 30rpx;
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  font-size: 28rpx;
   font-weight: 600;
-  color: #1d1d1f;
-  margin-bottom: 10rpx;
+  color: #1f1f1f;
+  margin-bottom: 12rpx;
+}
+
+.section-title::before {
+  content: '';
+  width: 6rpx;
+  height: 26rpx;
+  background: #1a73e8;
+  border-radius: 9999rpx;
 }
 
 .section-body {
-  font-size: 28rpx;
-  color: #3a3a3c;
-  line-height: 1.7;
+  font-size: 27rpx;
+  color: #444746;
+  line-height: 1.8;
   text-align: justify;
 }
 </style>

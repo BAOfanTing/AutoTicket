@@ -9,33 +9,40 @@
     <view class="disclaimer">仅供学习使用</view>
 
     <view class="card">
-      <view class="title">e家登录</view>
+      <!-- 品牌标识 -->
+      <view class="brand">
+        <view class="brand-mark">
+          <text class="brand-mark-text">A</text>
+        </view>
+        <text class="title">e家登录</text>
+        <text class="subtitle">请使用手机号完成登录</text>
+      </view>
 
-      <!-- 登录方式切换：密码登录 / 短信验证码登录 -->
-      <view class="mode-tabs">
-        <text
-          class="mode-tab"
+      <!-- 登录方式切换：Material 3 分段按钮 -->
+      <view class="segmented">
+        <view
+          class="seg-item"
           :class="{ active: loginMode === 'password' }"
           @click="loginMode = 'password'"
-        >密码登录</text>
-        <text
-          class="mode-tab"
+        >密码登录</view>
+        <view
+          class="seg-item"
           :class="{ active: loginMode === 'sms' }"
           @click="switchToSms"
-        >短信验证码登录</text>
+        >短信验证码登录</view>
       </view>
 
       <!-- 手机号输入（两种登录方式共用） -->
       <view class="field">
         <text class="label">手机号</text>
-        <input v-model="phone" class="input" placeholder="请输入手机号" />
+        <input v-model="phone" class="input" placeholder="请输入手机号" placeholder-style="color:#5f6368;" />
       </view>
 
       <!-- 密码输入（仅密码登录模式显示） -->
       <template v-if="loginMode === 'password'">
         <view class="field">
           <text class="label">密码</text>
-          <input v-model="password" class="input" password placeholder="请输入密码" />
+          <input v-model="password" class="input" password placeholder="请输入密码" placeholder-style="color:#5f6368;" />
         </view>
       </template>
 
@@ -43,12 +50,14 @@
       <view class="field">
         <text class="label">图形验证码</text>
         <view class="captcha-row">
-          <image v-if="captchaImage" :src="captchaImage" :key="captchaImage" mode="scaleToFill"
-            style="width: 240rpx; height: 100rpx; display: block; background-color: #fff; border: 2rpx solid #ddd; border-radius: 8rpx;"
-            @error="onCaptchaImageError" @load="onImageLoadSuccess" />
-          <view v-else class="captcha-placeholder">正在渲染...</view>
-          <button class="btn btn-ghost" @click="refreshCaptcha" :disabled="loadingCaptcha">
-            {{ loadingCaptcha ? '获取中...' : '刷新验证码' }}
+          <view class="captcha-frame">
+            <image v-if="captchaImage" :src="captchaImage" :key="captchaImage" mode="scaleToFill"
+              class="captcha-img"
+              @error="onCaptchaImageError" @load="onImageLoadSuccess" />
+            <text v-else class="captcha-placeholder">正在渲染...</text>
+          </view>
+          <button class="btn btn-outline btn-refresh" @click="refreshCaptcha" :disabled="loadingCaptcha">
+            {{ loadingCaptcha ? '获取中...' : '刷新' }}
           </button>
         </view>
       </view>
@@ -56,7 +65,7 @@
       <!-- 用户输入图形验证码 -->
       <view class="field">
         <text class="label">输入验证码</text>
-        <input v-model="captchaCode" class="input" placeholder="请输入图形验证码" />
+        <input v-model="captchaCode" class="input" placeholder="请输入图形验证码" placeholder-style="color:#5f6368;" />
       </view>
 
       <!-- 短信验证码登录额外字段：短信验证码输入 + 获取按钮 -->
@@ -64,9 +73,9 @@
         <view class="field">
           <text class="label">短信验证码</text>
           <view class="sms-row">
-            <input v-model="smsCode" class="input sms-input" placeholder="请输入短信验证码" />
+            <input v-model="smsCode" class="input sms-input" placeholder="请输入短信验证码" placeholder-style="color:#5f6368;" />
             <button
-              class="btn btn-sms"
+              class="btn btn-outline btn-sms"
               :disabled="sendingSms || smsCountdown > 0"
               @click="handleSendSms"
             >
@@ -84,7 +93,7 @@
       <!-- 用户协议与隐私政策 -->
       <view class="agreement-row">
         <checkbox-group @change="onAgreementChange">
-          <checkbox :checked="agreed" value="1" />
+          <checkbox :checked="agreed" value="1" color="#1a73e8" />
         </checkbox-group>
         <view class="agreement-text">
           <text>我已阅读并同意</text>
@@ -373,109 +382,170 @@ onLoad(() => {
   min-height: 100vh;
   padding: 24rpx;
   box-sizing: border-box;
+  background: #f8f9fa;
+  font-family: "Google Sans", "Roboto", -apple-system, "PingFang SC",
+               "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
 }
 
+/* ---------- 顶部横幅 ---------- */
 .hero {
-  margin-bottom: 24rpx;
+  margin-bottom: 20rpx;
+  border-radius: 28rpx;
+  overflow: hidden;
+  box-shadow: 0 4rpx 8rpx 2rpx rgba(60,64,67,.15), 0 1rpx 3rpx rgba(60,64,67,.30);
 }
 
 .hero-image {
   display: block;
   width: 100%;
-  border-radius: 20rpx;
 }
 
+/* ---------- 免责声明 ---------- */
+.disclaimer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 24rpx;
+  font-size: 24rpx;
+  color: #5f6368;
+}
+
+/* ---------- 卡片 ---------- */
 .card {
   background: #fff;
-  border-radius: 20rpx;
-  padding: 28rpx;
-  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.06);
+  border-radius: 28rpx;
+  padding: 36rpx 32rpx;
+  box-shadow: 0 1rpx 3rpx rgba(60,64,67,.15), 0 4rpx 8rpx 2rpx rgba(60,64,67,.06);
+}
+
+/* ---------- 品牌标识 ---------- */
+.brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 28rpx;
+}
+
+.brand-mark {
+  width: 88rpx;
+  height: 88rpx;
+  border-radius: 24rpx;
+  background: #1a73e8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 18rpx;
+  box-shadow: 0 4rpx 10rpx rgba(26, 115, 232, 0.35);
+}
+
+.brand-mark-text {
+  font-size: 44rpx;
+  font-weight: 700;
+  color: #fff;
 }
 
 .title {
-  font-size: 36rpx;
-  font-weight: 700;
-  margin-bottom: 24rpx;
-  text-align: center;
+  font-size: 34rpx;
+  font-weight: 600;
+  color: #1f1f1f;
+  letter-spacing: 0.3rpx;
 }
 
-/* 登录方式切换标签 */
-.mode-tabs {
+.subtitle {
+  font-size: 24rpx;
+  color: #5f6368;
+  margin-top: 8rpx;
+}
+
+/* ---------- Material 3 分段按钮 ---------- */
+.segmented {
   display: flex;
-  margin-bottom: 28rpx;
-  border-bottom: 2rpx solid #e5e5e5;
+  background: #f1f3f4;
+  border: 1.5rpx solid #dadce0;
+  border-radius: 9999rpx;
+  padding: 5rpx;
+  margin-bottom: 32rpx;
 }
 
-.mode-tab {
+.seg-item {
   flex: 1;
   text-align: center;
   padding: 16rpx 0;
-  font-size: 28rpx;
-  color: #8e8e93;
-  position: relative;
-  cursor: pointer;
+  font-size: 26rpx;
+  font-weight: 500;
+  color: #444746;
+  border-radius: 9999rpx;
+  transition: all 0.2s ease;
 }
 
-.mode-tab.active {
-  color: #007aff;
+.seg-item.active {
+  background: #fff;
+  color: #1a73e8;
   font-weight: 600;
+  box-shadow: 0 1rpx 2rpx rgba(60,64,67,.30), 0 1rpx 3rpx rgba(60,64,67,.15);
 }
 
-.mode-tab.active::after {
-  content: '';
-  position: absolute;
-  bottom: -2rpx;
-  left: 10%;
-  width: 80%;
-  height: 4rpx;
-  background: #007aff;
-  border-radius: 2rpx;
-}
-
+/* ---------- 表单字段 ---------- */
 .field {
-  margin-bottom: 20rpx;
+  margin-bottom: 22rpx;
 }
 
 .label {
   display: block;
   margin-bottom: 10rpx;
-  color: #6e6e73;
-  font-size: 26rpx;
+  color: #444746;
+  font-size: 24rpx;
+  font-weight: 500;
+  letter-spacing: 0.2rpx;
 }
 
+/* Material 3 描边输入框 */
 .input {
   width: 100%;
-  height: 80rpx;
-  border: 1rpx solid #d2d2d7;
-  border-radius: 14rpx;
-  padding: 0 20rpx;
+  height: 92rpx;
+  border: 1.5rpx solid #dadce0;
+  border-radius: 16rpx;
+  padding: 0 22rpx;
   box-sizing: border-box;
   background: #fff;
   font-size: 28rpx;
+  color: #1f1f1f;
 }
 
+/* ---------- 验证码行 ---------- */
 .captcha-row {
   display: flex;
-  gap: 12rpx;
+  gap: 16rpx;
   align-items: center;
 }
 
-.captcha-placeholder {
-  width: 240rpx;
-  height: 100rpx;
+.captcha-frame {
+  flex: 1;
+  height: 92rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f5f5f7;
-  border-radius: 8rpx;
-  color: #999;
-  font-size: 24rpx;
+  background: #f8f9fa;
+  border: 1.5rpx solid #dadce0;
+  border-radius: 12rpx;
+  overflow: hidden;
 }
 
-/* 短信验证码行 */
+.captcha-img {
+  width: 100%;
+  height: 92rpx;
+  display: block;
+}
+
+.captcha-placeholder {
+  color: #5f6368;
+  font-size: 22rpx;
+}
+
+/* ---------- 短信验证码行 ---------- */
 .sms-row {
   display: flex;
-  gap: 12rpx;
+  gap: 16rpx;
   align-items: center;
 }
 
@@ -483,62 +553,83 @@ onLoad(() => {
   flex: 1;
 }
 
+/* ---------- 按钮 ---------- */
 .btn {
-  height: 80rpx;
-  border-radius: 14rpx;
+  height: 88rpx;
+  border-radius: 9999rpx;
   font-size: 28rpx;
+  font-weight: 600;
+  letter-spacing: 0.4rpx;
   display: flex;
   align-items: center;
   justify-content: center;
+  box-sizing: border-box;
 }
 
 .btn-primary {
   width: 100%;
   margin-top: 12rpx;
-  background: #007aff;
+  background: #1a73e8;
   color: #fff;
+  box-shadow: 0 1rpx 2rpx rgba(60,64,67,.30), 0 2rpx 6rpx 2rpx rgba(60,64,67,.15);
 }
 
-.btn-ghost {
-  width: 220rpx;
-  background: #f5f5f7;
-  color: #1d1d1f;
+.btn-outline {
+  background: transparent;
+  color: #1a73e8;
+  border: 1.5rpx solid #dadce0;
+}
+
+.btn-refresh {
+  width: 132rpx;
+  flex-shrink: 0;
+  height: 92rpx;
   font-size: 26rpx;
+  padding: 0;
 }
 
 .btn-sms {
-  width: 220rpx;
-  background: #f5f5f7;
-  color: #007aff;
-  font-size: 26rpx;
+  width: 240rpx;
   flex-shrink: 0;
+  font-size: 26rpx;
 }
 
 .btn-sms[disabled] {
-  color: #c0c0c0;
+  color: rgba(60, 64, 67, 0.38);
+  background: rgba(60, 64, 67, 0.06);
 }
 
-.disclaimer {
-  text-align: center;
-  margin-bottom: 20rpx;
-  font-size: 28rpx;
-  color: #999;
+.btn[disabled] {
+  color: #fff;
+  background: rgba(0, 0, 0, 0.12) !important;
+  border-color: transparent !important;
+  box-shadow: none;
+  opacity: 0.6;
 }
 
+.btn-outline[disabled] {
+  color: rgba(60, 64, 67, 0.38) !important;
+  background: rgba(60, 64, 67, 0.06) !important;
+  border-color: #dadce0 !important;
+}
+
+/* ---------- 协议行 ---------- */
 .agreement-row {
   display: flex;
   align-items: flex-start;
-  margin-top: 20rpx;
+  margin-top: 28rpx;
 }
 
 .agreement-text {
   font-size: 24rpx;
-  color: #6e6e73;
-  line-height: 1.5;
+  color: #5f6368;
+  line-height: 1.6;
   margin-left: 8rpx;
+  flex: 1;
 }
 
 .link {
-  color: #007aff;
+  color: #1a73e8;
+  font-weight: 500;
 }
 </style>

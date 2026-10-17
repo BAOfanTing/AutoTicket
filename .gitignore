@@ -6,3 +6,9 @@ config.json
 AutoTicket.spec
 node_modules
 .claude/
+_remote_deploy.sh
+_remotescript.sh
+_status.sh
+_runcmd.cmd
+_*.sh
+_*.cmd

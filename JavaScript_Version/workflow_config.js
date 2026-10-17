@@ -23,10 +23,10 @@ module.exports = {
         ses_id: getSesId()
     },
     
-    // Cookie配置
+    // Cookie配置（请替换为你的实际值）
     cookies: {
-        'JSESSIONID': '406CD683439BDFEC843C6C3A5C928504',
-        'SERVERID': '12240fdeb12bd990da3bbf786eeeee2f|1758383252|1758382894'
+        'JSESSIONID': '此处填写你的JSESSIONID',
+        'SERVERID': '此处填写你的SERVERID'
     },
     
     // HTTP请求头配置

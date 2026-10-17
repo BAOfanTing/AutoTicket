@@ -7,8 +7,9 @@
 
     <!-- 获取失败时显示错误信息和重试按钮 -->
     <view class="card" v-else-if="error">
+      <view class="error-icon">!</view>
       <view class="error-text">{{ error }}</view>
-      <button class="btn btn-primary" @click="fetchQrCode">重试</button>
+      <button class="btn btn-primary btn-retry" @click="fetchQrCode">重试</button>
     </view>
 
     <template v-else>
@@ -36,29 +37,31 @@
       <!-- 地铁优惠券查询结果 -->
       <view class="card info-card">
         <view class="title">地铁优惠券</view>
-        <view
-          class="info-row coupon-switch"
-          :class="{ active: activeAwardType === '1' }"
-          @click="switchAwardType('1')"
-        >
-          <text class="info-label">2元券当前领取数</text>
-          <text class="info-value">{{ subwayInfo.num2 }}</text>
-        </view>
-        <view
-          class="info-row coupon-switch"
-          :class="{ active: activeAwardType === '2' }"
-          @click="switchAwardType('2')"
-        >
-          <text class="info-label">4元券当前领取数</text>
-          <text class="info-value">{{ subwayInfo.num4 }}</text>
-        </view>
-        <view
-          class="info-row coupon-switch"
-          :class="{ active: activeAwardType === '3' }"
-          @click="switchAwardType('3')"
-        >
-          <text class="info-label">6元券当前领取数</text>
-          <text class="info-value">{{ subwayInfo.num6 }}</text>
+        <view class="coupon-switches">
+          <view
+            class="coupon-chip"
+            :class="{ active: activeAwardType === '1' }"
+            @click="switchAwardType('1')"
+          >
+            <text class="coupon-chip-label">2元券</text>
+            <text class="coupon-chip-num">{{ subwayInfo.num2 }}</text>
+          </view>
+          <view
+            class="coupon-chip"
+            :class="{ active: activeAwardType === '2' }"
+            @click="switchAwardType('2')"
+          >
+            <text class="coupon-chip-label">4元券</text>
+            <text class="coupon-chip-num">{{ subwayInfo.num4 }}</text>
+          </view>
+          <view
+            class="coupon-chip"
+            :class="{ active: activeAwardType === '3' }"
+            @click="switchAwardType('3')"
+          >
+            <text class="coupon-chip-label">6元券</text>
+            <text class="coupon-chip-num">{{ subwayInfo.num6 }}</text>
+          </view>
         </view>
 
         <view v-if="subwayInfo.list.length" class="coupon-list">
@@ -82,7 +85,7 @@
 
       <!-- 关闭按钮 -->
       <view class="actions">
-        <button class="btn btn-close" @click="goBack">关闭</button>
+        <button class="btn btn-outline" @click="goBack">关闭</button>
       </view>
     </template>
   </view>
@@ -224,44 +227,70 @@ onMounted(() => {
 <style scoped>
 .page {
   min-height: 100vh;
-  padding: 30rpx;
+  padding: 24rpx;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
+  background: #f8f9fa;
+  font-family: "Google Sans", "Roboto", -apple-system, "PingFang SC",
+               "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
 }
 
+/* ---------- 通用卡片 ---------- */
 .card {
   background: #fff;
-  border-radius: 20rpx;
+  border-radius: 28rpx;
   padding: 30rpx;
-  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1rpx 3rpx rgba(60,64,67,.15), 0 4rpx 8rpx 2rpx rgba(60,64,67,.06);
   margin-bottom: 24rpx;
   width: 100%;
   box-sizing: border-box;
 }
 
 .title {
-  font-size: 34rpx;
-  font-weight: 700;
-  margin-bottom: 20rpx;
+  font-size: 28rpx;
+  font-weight: 500;
+  color: #1f1f1f;
+  letter-spacing: 0.2rpx;
+  margin-bottom: 22rpx;
 }
 
 .loading-text {
   text-align: center;
-  color: #6e6e73;
+  color: #5f6368;
   font-size: 28rpx;
   padding: 40rpx 0;
+}
+
+/* ---------- 错误态 ---------- */
+.error-icon {
+  width: 80rpx;
+  height: 80rpx;
+  border-radius: 9999rpx;
+  background: rgba(217, 48, 37, 0.12);
+  color: #d93025;
+  font-size: 44rpx;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 20rpx;
 }
 
 .error-text {
   text-align: center;
   color: #d93025;
   font-size: 28rpx;
-  padding: 20rpx 0;
-  margin-bottom: 20rpx;
+  padding: 0 20rpx 20rpx;
 }
 
+.btn-retry {
+  width: 220rpx;
+  margin: 0 auto;
+}
+
+/* ---------- 二维码卡片 ---------- */
 .qr-card {
   display: flex;
   justify-content: center;
@@ -274,8 +303,9 @@ onMounted(() => {
   height: 560rpx;
 }
 
+/* ---------- 信息卡片 ---------- */
 .info-card {
-  padding: 24rpx 30rpx;
+  padding: 26rpx 30rpx;
 }
 
 .info-row {
@@ -283,51 +313,80 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 20rpx 0;
-  border-bottom: 1rpx solid #f0f0f0;
+  border-bottom: 1rpx solid #e8eaed;
 }
 
 .info-row:last-child {
   border-bottom: none;
 }
 
-.coupon-switch {
-  transition: all 0.2s ease;
-}
-
-.coupon-switch.active {
-  background: #f0f9f4;
-}
-
-.coupon-switch.active .info-label,
-.coupon-switch.active .info-value {
-  color: #16a34a;
-  font-weight: 700;
-}
-
 .info-label {
   font-size: 28rpx;
-  color: #6e6e73;
+  color: #5f6368;
 }
 
 .info-value {
   font-size: 28rpx;
-  color: #1d1d1f;
+  color: #1f1f1f;
   font-weight: 500;
 }
 
 .money {
-  color: #ff9500;
+  color: #f9ab00;
   font-size: 32rpx;
   font-weight: 700;
 }
 
+/* ---------- 优惠券切换 Chip ---------- */
+.coupon-switches {
+  display: flex;
+  gap: 14rpx;
+  margin-bottom: 8rpx;
+}
+
+.coupon-chip {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6rpx;
+  padding: 18rpx 0;
+  border: 1.5rpx solid #dadce0;
+  border-radius: 16rpx;
+  background: #fff;
+  transition: all 0.2s ease;
+}
+
+.coupon-chip-label {
+  font-size: 24rpx;
+  color: #5f6368;
+  font-weight: 500;
+}
+
+.coupon-chip-num {
+  font-size: 30rpx;
+  color: #1f1f1f;
+  font-weight: 700;
+}
+
+.coupon-chip.active {
+  background: rgba(26, 115, 232, 0.08);
+  border-color: #1a73e8;
+}
+
+.coupon-chip.active .coupon-chip-label,
+.coupon-chip.active .coupon-chip-num {
+  color: #1a73e8;
+}
+
+/* ---------- 优惠券列表 ---------- */
 .coupon-list {
   margin-top: 20rpx;
 }
 
 .coupon-item {
   padding: 20rpx 0;
-  border-top: 1rpx solid #f0f0f0;
+  border-top: 1rpx solid #e8eaed;
 }
 
 .coupon-line {
@@ -339,40 +398,51 @@ onMounted(() => {
 
 .coupon-label {
   font-size: 24rpx;
-  color: #8e8e93;
+  color: #5f6368;
 }
 
 .coupon-value {
   font-size: 24rpx;
-  color: #1d1d1f;
+  color: #1f1f1f;
+  font-weight: 500;
 }
 
 .empty-text {
   margin-top: 20rpx;
   text-align: center;
-  color: #8e8e93;
+  color: #5f6368;
   font-size: 26rpx;
 }
 
+/* ---------- 按钮 ---------- */
 .actions {
   width: 100%;
-  margin-top: 10rpx;
+  margin-top: 8rpx;
 }
 
 .btn {
-  border-radius: 14rpx;
+  width: 100%;
+  border-radius: 9999rpx;
   font-size: 28rpx;
-  height: 80rpx;
-  line-height: 80rpx;
+  font-weight: 600;
+  letter-spacing: 0.4rpx;
+  height: 88rpx;
+  line-height: 88rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
 }
 
 .btn-primary {
-  background: #007aff;
+  background: #1a73e8;
   color: #fff;
+  box-shadow: 0 1rpx 2rpx rgba(60,64,67,.30), 0 2rpx 6rpx 2rpx rgba(60,64,67,.15);
 }
 
-.btn-close {
-  background: #f5f5f7;
-  color: #1d1d1f;
+.btn-outline {
+  background: transparent;
+  color: #1a73e8;
+  border: 1.5rpx solid #dadce0;
 }
 </style>

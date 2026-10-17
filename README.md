@@ -179,6 +179,9 @@ AutoTicket/
 ├── Decoder.py                   # Python 解密模块 - data2 解密
 ├── gui.py                       # Python 图形界面（PyQt5）
 ├── updater.py                   # Python 自动更新模块
+├── stats_client.py              # 在线人数/抢票数统计上报模块（需配置服务端地址）
+├── docs/
+│   └── 数据统计接口对接文档.md    # 服务端接口定义（供服务端开发者参考）
 ├── requirements.txt             # Python 依赖
 ├── AutoTicket.spec              # PyInstaller 打包配置
 │

@@ -8,46 +8,55 @@
     <!-- 免责声明 -->
     <view class="disclaimer">仅供学习使用</view>
 
-    <!-- 登录状态卡片 -->
+    <!-- 登录状态卡片（Material 用户资料头） -->
     <view class="card status-card">
-      <view class="row">
-        <text class="label">登录状态</text>
-        <text :class="isLoggedIn ? 'ok' : 'bad'">{{ isLoggedIn ? '已登录' : '未登录' }}</text>
+      <view class="status-head">
+        <view class="status-avatar">
+          <text class="status-avatar-text">{{ (userName || '用户').slice(0, 1) }}</text>
+        </view>
+        <view class="status-meta">
+          <view class="status-user">
+            <text class="status-name">{{ userName || '未登录' }}</text>
+            <text class="chip" :class="isLoggedIn ? 'chip-ok' : 'chip-bad'">{{ isLoggedIn ? '已登录' : '未登录' }}</text>
+          </view>
+          <text v-if="remainIntegral > 0" class="status-integral">积分 · {{ remainIntegral }}</text>
+        </view>
       </view>
-      <view class="row small" v-if="userName">
-        <text>当前用户: {{ userName }}</text>
-        <text v-if="remainIntegral > 0" style="color:#1f9d55;">积分: {{ remainIntegral }}</text>
-      </view>
-      <button class="btn btn-danger" @click="logout" :disabled="running">退出登录</button>
+      <button class="btn btn-outline-danger" @click="logout" :disabled="running">退出登录</button>
     </view>
 
     <!-- 配置参数卡片 -->
     <view class="card">
-      <view class="title">配置参数</view>
+      <view class="card-head">
+        <text class="title">配置参数</text>
+      </view>
 
       <!-- 兑换面额选择 -->
       <view class="field">
         <text class="label">优惠券面额</text>
         <picker mode="selector" :range="exchangeOptions" range-key="label" :value="exchangeIndex" @change="onExchangeChange">
-          <view class="input picker">{{ exchangeOptions[exchangeIndex].label }}</view>
+          <view class="input picker">
+            <text class="input-value">{{ exchangeOptions[exchangeIndex].label }}</text>
+            <text class="picker-arrow">▾</text>
+          </view>
         </picker>
       </view>
 
       <!-- 定时抢票时间设置 -->
       <view class="field">
         <text class="label">抢票时间</text>
-        <input v-model="form.runTime" class="input" placeholder="YYYY-MM-DD HH:MM:SS" />
+        <input v-model="form.runTime" class="input" placeholder="YYYY-MM-DD HH:MM:SS" placeholder-style="color:#5f6368;" />
       </view>
 
       <!-- 运行次数与间隔（并列布局） -->
       <view class="field inline">
         <view class="half">
           <text class="label">运行次数</text>
-          <input v-model="form.runCount" class="input" placeholder="请输入运行次数" />
+          <input v-model="form.runCount" class="input" placeholder="次数" placeholder-style="color:#5f6368;" />
         </view>
         <view class="half">
           <text class="label">运行间隔(秒)</text>
-          <input v-model="form.timeSleep" class="input" placeholder="请输入运行间隔" />
+          <input v-model="form.timeSleep" class="input" placeholder="间隔" placeholder-style="color:#5f6368;" />
         </view>
       </view>
 
@@ -55,18 +64,50 @@
       <view class="actions">
         <view class="action-row">
           <button class="btn btn-primary flex-1" @click="startProgram" :disabled="running || !isLoggedIn">启动</button>
-          <button class="btn btn-stop flex-1" @click="stopProgram" :disabled="!running">停止</button>
+          <button class="btn btn-fill-error flex-1" @click="stopProgram" :disabled="!running">停止</button>
         </view>
         <view class="action-row">
-          <button class="btn flex-1" @click="runDailyTask" :disabled="running || dailyTaskRunning || !isLoggedIn">
+          <button class="btn btn-outline flex-1" @click="runDailyTask" :disabled="running || dailyTaskRunning || !isLoggedIn">
             {{ dailyTaskRunning ? '执行中...' : '执行每日任务' }}
           </button>
-          <button class="btn btn-qr flex-1" @click="goQrCode" :disabled="!isLoggedIn">绿色出行码</button>
+          <button class="btn btn-success flex-1" @click="goQrCode" :disabled="!isLoggedIn">绿色出行码</button>
+        </view>
+        <!-- 每日任务完成状态标签 -->
+        <view class="daily-status" v-if="dailyTaskDone">
+          <text class="daily-status-chip">✓ 每日任务已完成</text>
         </view>
       </view>
     </view>
+
+    <!-- 实时统计卡片 -->
     <view class="card">
-      <view class="title">运行日志</view>
+      <view class="card-head">
+        <text class="title">实时统计</text>
+      </view>
+      <view class="stats-grid">
+        <view class="stat-card">
+          <text class="stat-label">在线人数</text>
+          <text class="stat-value" style="color:#1e8e3e;">{{ statsOnline }}</text>
+        </view>
+        <view class="stat-card">
+          <text class="stat-label">2元券</text>
+          <text class="stat-value">{{ statsType9 }}</text>
+        </view>
+        <view class="stat-card">
+          <text class="stat-label">4元券</text>
+          <text class="stat-value">{{ statsType10 }}</text>
+        </view>
+        <view class="stat-card">
+          <text class="stat-label">6元券</text>
+          <text class="stat-value">{{ statsType11 }}</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="card">
+      <view class="card-head">
+        <text class="title">运行日志</text>
+      </view>
       <scroll-view scroll-y class="log-box">
         <view class="log-line" v-for="(item, idx) in logs" :key="idx">{{ item }}</view>
       </scroll-view>
@@ -76,11 +117,12 @@
 
 <script setup>
 import { ref, reactive, computed, watch } from 'vue'
-import { onLoad } from '@dcloudio/uni-app'
+import { onLoad, onUnload } from '@dcloudio/uni-app'
 import { runDailyTaskWorkflow, runExchangeOnce } from '../../src/services/taskService'
 import { clearAuth, loadAuth, loadConfig, saveAuth, saveConfig } from '../../src/utils/storage'
 import { formatDateTime, getNextRunTime, parseDateTime } from '../../src/utils/time'
 import { queryUserInfo, syncServerTime } from '../../src/services/authService'
+import { isStatsEnabled, fetchStats, reportOnline, reportOffline } from '../../src/services/statsService'
 
 // ==================== 响应式状态定义 ====================
 /** 是否正在执行兑换任务循环 */
@@ -91,12 +133,30 @@ const userName = ref('')
 const remainIntegral = ref(0)
 /** 是否正在执行每日任务 */
 const dailyTaskRunning = ref(false)
+/** 每日任务是否已完成 */
+const dailyTaskDone = ref(false)
+/** 每日任务完成日期（当天有效） */
+const dailyTaskDoneDate = ref('')
 /** 是否请求停止兑换任务 */
 const stopRequested = ref(false)
 /** 定时器句柄（用于 setTimeout 取消） */
 const timerId = ref(null)
 /** 运行日志列表，每项为一行日志文本 */
 const logs = ref([])
+
+// ==================== 实时统计 ====================
+/** 统计面板是否启用 */
+const statsEnabled = isStatsEnabled()
+/** 在线人数 */
+const statsOnline = ref(0)
+/** 2元券抢到数 */
+const statsType9 = ref(0)
+/** 4元券抢到数 */
+const statsType10 = ref(0)
+/** 6元券抢到数 */
+const statsType11 = ref(0)
+/** 统计轮询定时器 */
+let statsTimer = null
 /** 优惠券面额选项 */
 const exchangeOptions = [
   { label: '2元优惠券', value: '9' },
@@ -128,7 +188,7 @@ function onExchangeChange(e) {
 
 /** 将当前表单配置持久化到本地存储 */
 function persistConfig() {
-  saveConfig({ ...form })
+  saveConfig({ ...form, dailyTaskDoneDate: dailyTaskDoneDate.value })
 }
 
 /**
@@ -151,6 +211,9 @@ function logout() {
 
   clearAuth()
   saveAuth({ isLoggedIn: false })
+  dailyTaskDone.value = false
+  dailyTaskDoneDate.value = ''
+  stopStatsPolling()
   appendLog('已退出登录')
   uni.redirectTo({ url: '/pages/login/login' })
 }
@@ -258,6 +321,39 @@ function goQrCode() {
   uni.navigateTo({ url: '/pages/qrcode/qrcode' })
 }
 
+// ==================== 实时统计 ====================
+/** 拉取一次统计数据并刷新界面 */
+async function fetchAndShowStats() {
+  try {
+    const data = await fetchStats()
+    if (data) {
+      statsOnline.value = data.online
+      statsType9.value = data.by_type['9'] || 0
+      statsType10.value = data.by_type['10'] || 0
+      statsType11.value = data.by_type['11'] || 0
+    }
+  } catch {
+    // 静默失败
+  }
+}
+
+/** 启动统计轮询（每 60 秒刷新一次） */
+function startStatsPolling() {
+  if (!statsEnabled) return
+  reportOnline('open')
+  fetchAndShowStats()
+  statsTimer = setInterval(fetchAndShowStats, 60000)
+}
+
+/** 停止统计轮询 */
+function stopStatsPolling() {
+  if (statsTimer) {
+    clearInterval(statsTimer)
+    statsTimer = null
+  }
+  reportOffline()
+}
+
 /**
  * 执行每日任务工作流
  */
@@ -269,6 +365,7 @@ async function runDailyTask() {
 
   persistConfig()
   dailyTaskRunning.value = true
+  dailyTaskDone.value = false
   appendLog('开始执行每日任务工作流')
   try {
     await runDailyTaskWorkflow({
@@ -276,6 +373,9 @@ async function runDailyTask() {
       sesId: form.sesId,
       log: appendLog
     })
+    dailyTaskDone.value = true
+    dailyTaskDoneDate.value = new Date().toISOString().slice(0, 10)
+    persistConfig()
     appendLog('每日任务执行完成')
   } catch (error) {
     appendLog(`每日任务执行失败: ${error.message}`)
@@ -309,6 +409,13 @@ onLoad(async () => {
   form.runCount = config.runCount || form.runCount
   form.timeSleep = (config.timeSleep && Number(config.timeSleep) >= 0.15) ? config.timeSleep : form.timeSleep
 
+  // 恢复每日任务完成状态
+  dailyTaskDoneDate.value = config.dailyTaskDoneDate || ''
+  const today = new Date().toISOString().slice(0, 10)
+  if (dailyTaskDoneDate.value === today) {
+    dailyTaskDone.value = true
+  }
+
   // 调用 U005 验证 ses_id 是否仍然有效，同时获取用户姓名
   // 测试账号 admin 跳过验证
   if (form.loginName === 'admin' && form.sesId === 'test_ses_id') {
@@ -317,6 +424,7 @@ onLoad(async () => {
     appendLog('欢迎, 测试管理员  当前积分: 999')
     appendLog('登录状态已恢复')
     persistConfig()
+    startStatsPolling()
     return
   }
 
@@ -344,6 +452,12 @@ onLoad(async () => {
 
   appendLog('登录状态已恢复')
   persistConfig()
+  startStatsPolling()
+})
+
+/** 页面卸载时停止统计轮询并上报下线 */
+onUnload(() => {
+  stopStatsPolling()
 })
 
 // ==================== 监听 ====================
@@ -354,63 +468,195 @@ watch(form, () => { persistConfig() }, { deep: true })
 <style scoped>
 .page {
   min-height: 100vh;
-  padding: 20rpx;
+  padding: 24rpx;
   box-sizing: border-box;
+  background: #f8f9fa;
+  font-family: "Google Sans", "Roboto", -apple-system, "PingFang SC",
+               "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
 }
 
+/* ---------- 顶部横幅 ---------- */
 .hero {
   margin-bottom: 20rpx;
+  border-radius: 28rpx;
+  overflow: hidden;
+  box-shadow: 0 4rpx 8rpx 2rpx rgba(60,64,67,.15), 0 1rpx 3rpx rgba(60,64,67,.30);
 }
 
 .hero-image {
   display: block;
   width: 100%;
-  border-radius: 20rpx;
 }
 
+/* ---------- 免责声明 ---------- */
+.disclaimer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8rpx;
+  margin-bottom: 24rpx;
+  font-size: 24rpx;
+  color: #5f6368;
+}
+
+/* ---------- 通用卡片（Material 3 surface + elevation） ---------- */
 .card {
   background: #fff;
-  border-radius: 20rpx;
-  padding: 24rpx;
-  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.06);
-  margin-bottom: 20rpx;
+  border-radius: 28rpx;
+  padding: 28rpx;
+  box-shadow: 0 1rpx 3rpx rgba(60,64,67,.15), 0 4rpx 8rpx 2rpx rgba(60,64,67,.06);
+  margin-bottom: 24rpx;
 }
 
-.status-card .row {
+/* ---------- 登录状态卡片 ---------- */
+.status-card {
+  background: #fff;
+}
+
+.status-head {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  margin-bottom: 24rpx;
+}
+
+.status-avatar {
+  width: 88rpx;
+  height: 88rpx;
+  border-radius: 9999rpx;
+  background: rgba(26, 115, 232, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.status-avatar-text {
+  font-size: 36rpx;
+  font-weight: 600;
+  color: #1a73e8;
+}
+
+.status-meta {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+  overflow: hidden;
+}
+
+.status-user {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  flex-wrap: wrap;
+}
+
+.status-name {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #1f1f1f;
+}
+
+.status-integral {
+  font-size: 24rpx;
+  color: #1e8e3e;
+  font-weight: 500;
+}
+
+/* Material chip */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4rpx 16rpx;
+  border-radius: 9999rpx;
+  font-size: 22rpx;
+  font-weight: 600;
+  letter-spacing: 0.5rpx;
+}
+
+.chip-ok {
+  background: rgba(30, 142, 62, 0.12);
+  color: #1e8e3e;
+}
+
+.chip-bad {
+  background: rgba(217, 48, 37, 0.12);
+  color: #d93025;
+}
+
+/* ---------- 每日任务完成状态 ---------- */
+.daily-status {
+  display: flex;
+  justify-content: center;
+  margin-top: 16rpx;
+}
+
+.daily-status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6rpx;
+  padding: 8rpx 24rpx;
+  border-radius: 9999rpx;
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #1e8e3e;
+  background: #e6f4ea;
+  border: 1rpx solid #a8dab5;
+}
+
+/* ---------- 卡片标题 ---------- */
+.card-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12rpx;
-}
-
-.status-card .small {
-  font-size: 24rpx;
-  color: #6e6e73;
-}
-
-.ok {
-  color: #1f9d55;
-  font-weight: 700;
-}
-
-.bad {
-  color: #d93025;
-  font-weight: 700;
+  margin-bottom: 24rpx;
 }
 
 .title {
-  font-size: 34rpx;
-  font-weight: 700;
-  margin-bottom: 22rpx;
+  font-size: 28rpx;
+  font-weight: 500;
+  color: #1f1f1f;
+  letter-spacing: 0.2rpx;
 }
 
+/* ---------- 实时统计 ---------- */
+.stats-grid {
+  display: flex;
+  gap: 12rpx;
+}
+
+.stat-card {
+  flex: 1;
+  background: #f1f3f4;
+  border-radius: 16rpx;
+  padding: 16rpx 8rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6rpx;
+}
+
+.stat-label {
+  font-size: 20rpx;
+  color: #5f6368;
+  font-weight: 500;
+}
+
+.stat-value {
+  font-size: 36rpx;
+  font-weight: 700;
+  color: #1f1f1f;
+}
+
+/* ---------- 表单字段 ---------- */
 .field {
-  margin-bottom: 18rpx;
+  margin-bottom: 20rpx;
 }
 
 .inline {
   display: flex;
-  gap: 14rpx;
+  gap: 16rpx;
 }
 
 .half {
@@ -419,33 +665,53 @@ watch(form, () => { persistConfig() }, { deep: true })
 
 .label {
   display: block;
-  margin-bottom: 8rpx;
-  color: #6e6e73;
+  margin-bottom: 10rpx;
+  color: #444746;
+  font-size: 24rpx;
+  font-weight: 500;
+  letter-spacing: 0.2rpx;
 }
 
+/* Material 3 描边输入框 */
 .input {
   width: 100%;
-  height: 78rpx;
-  border: 1rpx solid #d2d2d7;
-  border-radius: 14rpx;
-  padding: 0 16rpx;
+  height: 88rpx;
+  border: 1.5rpx solid #dadce0;
+  border-radius: 16rpx;
+  padding: 0 22rpx;
   box-sizing: border-box;
+  background: #fff;
+  font-size: 28rpx;
+  color: #1f1f1f;
 }
 
 .picker {
   display: flex;
   align-items: center;
+  justify-content: space-between;
 }
 
+.input-value {
+  flex: 1;
+}
+
+.picker-arrow {
+  color: #5f6368;
+  font-size: 26rpx;
+  padding-left: 12rpx;
+}
+
+/* ---------- 按钮组 ---------- */
 .actions {
   display: flex;
   flex-direction: column;
-  gap: 12rpx;
+  gap: 14rpx;
+  margin-top: 8rpx;
 }
 
 .action-row {
   display: flex;
-  gap: 12rpx;
+  gap: 14rpx;
 }
 
 .flex-1 {
@@ -456,58 +722,84 @@ watch(form, () => { persistConfig() }, { deep: true })
   width: 100%;
 }
 
+/* Material 3 药丸按钮基类 */
 .btn {
-  border-radius: 14rpx;
+  border-radius: 9999rpx;
   font-size: 26rpx;
-  height: 76rpx;
-  padding: 0 20rpx;
+  font-weight: 600;
+  height: 84rpx;
+  line-height: 84rpx;
+  padding: 0 28rpx;
+  letter-spacing: 0.4rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
 }
 
 .btn-primary {
-  background: #007aff;
+  background: #1a73e8;
   color: #fff;
+  box-shadow: 0 1rpx 2rpx rgba(60,64,67,.30), 0 2rpx 6rpx 2rpx rgba(60,64,67,.15);
 }
 
-.btn-danger {
-  background: #fff5f4;
-  color: #ff3b30;
-}
-
-.btn-stop {
-  background: #ff3b30;
+.btn-fill-error {
+  background: #d93025;
   color: #fff;
+  box-shadow: 0 1rpx 2rpx rgba(60,64,67,.30), 0 2rpx 6rpx 2rpx rgba(60,64,67,.15);
 }
 
-.btn-qr {
-  background: #1f9d55;
+.btn-success {
+  background: #1e8e3e;
   color: #fff;
+  box-shadow: 0 1rpx 2rpx rgba(60,64,67,.30), 0 2rpx 6rpx 2rpx rgba(60,64,67,.15);
 }
 
-.btn-github {
-  background: #333;
-  color: #fff;
+.btn-outline {
+  background: transparent;
+  color: #1a73e8;
+  border: 1.5rpx solid #dadce0;
 }
 
+.btn-outline-danger {
+  width: 100%;
+  background: transparent;
+  color: #d93025;
+  border: 1.5rpx solid rgba(217, 48, 37, 0.4);
+}
+
+/* 禁用态 */
+.btn[disabled] {
+  color: #ffffff;
+  background: rgba(0, 0, 0, 0.12) !important;
+  border-color: transparent !important;
+  box-shadow: none;
+  opacity: 0.6;
+}
+
+.btn-outline[disabled],
+.btn-outline-danger[disabled] {
+  color: rgba(60, 64, 67, 0.38) !important;
+  background: rgba(60, 64, 67, 0.06) !important;
+  border-color: #dadce0 !important;
+}
+
+/* ---------- 运行日志 ---------- */
 .log-box {
-  height: 360rpx;
-  border: 1rpx solid #e5e5ea;
-  border-radius: 12rpx;
-  padding: 12rpx;
+  height: 380rpx;
+  border: 1rpx solid #e8eaed;
+  border-radius: 16rpx;
+  padding: 20rpx;
   box-sizing: border-box;
-  background: #fbfbfd;
+  background: #f8f9fa;
+  font-family: "Roboto Mono", "Menlo", "Consolas", monospace;
 }
 
 .log-line {
-  font-size: 24rpx;
-  line-height: 1.6;
+  font-size: 22rpx;
+  line-height: 1.7;
   margin-bottom: 6rpx;
   word-break: break-all;
-}
-
-.disclaimer {
-  text-align: center;
-  margin-bottom: 16rpx;
-  font-size: 28rpx;
-  color: #999;
+  color: #444746;
 }
 </style>

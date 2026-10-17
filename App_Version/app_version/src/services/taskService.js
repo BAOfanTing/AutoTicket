@@ -21,12 +21,34 @@ function parseData2Response(response) {
   }
 }
 
-// 统一记录日志并返回结果
-async function executeTask(path, payload, log) {
+// 将每日任务解密响应格式化为人类可读的结果文本（非 JSON）
+function formatResultText(parsed, action = '操作') {
+  if (!parsed || typeof parsed !== 'object') {
+    return `${action}: 响应格式异常`
+  }
+  const result = String(parsed.result || '')
+  const msg = String(parsed.msg || '')
+  if (result === '0') {
+    const parts = [`${action}: 成功`]
+    if (msg) parts.push(`(${msg})`)
+    if (parsed.remain_integral !== undefined && parsed.remain_integral !== null) {
+      parts.push(`剩余积分: ${parsed.remain_integral}`)
+      if (parsed.total_integral !== undefined && parsed.total_integral !== null) {
+        parts.push(`总积分: ${parsed.total_integral}`)
+      }
+    }
+    return parts.join('  ')
+  } else {
+    return `${action}: 失败${msg ? ` - ${msg}` : ''}`
+  }
+}
+
+// 统一记录日志并返回结果；formatter 默认 JSON.stringify，每日任务传入 formatResultText 输出可读文本
+async function executeTask(path, payload, log, formatter = JSON.stringify) {
   const encryptedPayload = buildEncryptedPayload(payload)
   const response = await postJson(path, encryptedPayload)
   const parsed = parseData2Response(response)
-  log(JSON.stringify(parsed))
+  log(formatter(parsed))
   return parsed
 }
 
@@ -59,10 +81,10 @@ export async function runDailyTaskWorkflow({ loginName, sesId, log }) {
 
   log('开始执行每日任务：登录 -> 3次签到 -> 评论 -> 查询积分')
 
-  await executeTask(ENDPOINTS.signin, { ...common, type: '1' }, (m) => log(`登录结果: ${m}`))
+  await executeTask(ENDPOINTS.signin, { ...common, type: '1' }, log, (p) => formatResultText(p, '登录'))
 
   for (let i = 1; i <= 3; i += 1) {
-    await executeTask(ENDPOINTS.signin, { ...common, timestamp: nowTs(), type: '5' }, (m) => log(`第${i}次签到: ${m}`))
+    await executeTask(ENDPOINTS.signin, { ...common, timestamp: nowTs(), type: '5' }, log, (p) => formatResultText(p, `第${i}次签到`))
   }
 
   await executeTask(
@@ -76,8 +98,9 @@ export async function runDailyTaskWorkflow({ loginName, sesId, log }) {
       suffix: 'png',
       content: '好'
     },
-    (m) => log(`评论结果: ${m}`)
+    log,
+    (p) => formatResultText(p, '评论')
   )
 
-  await executeTask(ENDPOINTS.query, { ...common, timestamp: nowTs() }, (m) => log(`积分查询: ${m}`))
+  await executeTask(ENDPOINTS.query, { ...common, timestamp: nowTs() }, log, (p) => formatResultText(p, '查询积分'))
 }

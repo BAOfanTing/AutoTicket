@@ -8,6 +8,7 @@ import time
 import random
 import string
 import base64
+import json
 from datetime import datetime, timedelta
 from email.utils import parsedate_to_datetime
 import threading
@@ -35,6 +36,9 @@ timeSleep = 0.2  # 请求间隔   0.2 = 0.2秒发送一次
 
 # API 端点配置（从 constants.py 导入）
 from constants import BASE_URL, ENDPOINTS
+
+# 统计数据上报（在线人数 / 抢票数），未配置服务端地址时自动静默关闭
+import stats_client
 # ============================================================
 
 # 【密钥1】用于 3DES 密钥传输加密的 RSA 公钥
@@ -257,9 +261,80 @@ def log_print(*args, **kwargs):
     else:
         print(*args, **kwargs)
 
+def format_result_text(decrypted_json_str, action="操作"):
+    """
+    将每日任务解密响应格式化为人类可读的结果文本（非 JSON）。
+
+    提取 result / msg / remain_integral / total_integral 等关键字段，
+    以「操作: 成功 (消息)  剩余积分: N  总积分: N」形式输出。
+    """
+    try:
+        data = json.loads(decrypted_json_str)
+    except Exception:
+        return f"{action}: 响应解析失败"
+
+    if not isinstance(data, dict):
+        return f"{action}: 响应格式异常"
+
+    result = str(data.get("result", ""))
+    msg = str(data.get("msg", ""))
+
+    if result == "0":
+        parts = [f"{action}: 成功"]
+        if msg:
+            parts.append(f"({msg})")
+        remain = data.get("remain_integral")
+        if remain is not None:
+            parts.append(f"剩余积分: {remain}")
+            if data.get("total_integral") is not None:
+                parts.append(f"总积分: {data['total_integral']}")
+        return "  ".join(parts)
+    else:
+        return f"{action}: 失败" + (f" - {msg}" if msg else "")
+
 # ================== 兑换任务 ==================
+# 本轮任务是否已上报过抢票成功（避免同一轮里多个线程重复上报）
+_grab_reported = False
+_grab_lock = threading.Lock()
+
+
+def extract_response_msg(decrypted_json):
+    """
+    从解密后的响应中提取 msg 字段。
+
+    服务端返回结构存在嵌套：msg 可能在外层，也可能在内层 data2 字符串里，
+    两种结构都做兼容。解析失败返回空字符串。
+    """
+    try:
+        data = json.loads(decrypted_json)
+    except Exception:
+        return ""
+
+    if not isinstance(data, dict):
+        return ""
+    if data.get("msg"):
+        return str(data["msg"])
+
+    inner = data.get("data2")
+    if isinstance(inner, str):
+        try:
+            inner_data = json.loads(inner)
+            if isinstance(inner_data, dict) and inner_data.get("msg"):
+                return str(inner_data["msg"])
+        except Exception:
+            return ""
+    return ""
+
+
+def is_exchange_success(decrypted_json):
+    """判断本次兑换是否成功（与 JS 版一致：响应 msg 为"兑换成功"）"""
+    return extract_response_msg(decrypted_json) == "兑换成功"
+
+
 def run_exchange():
-    """执行一次兑换操作：构造加密请求 → 发起 POST → 解密并打印响应"""
+    """执行一次兑换操作：构造加密请求 → 发起 POST → 解密 → 判断是否抢到并上报统计"""
+    global _grab_reported
+
     payload = build_payload()
     resp = session.post(URL, json=payload, verify=False)
 
@@ -268,6 +343,15 @@ def run_exchange():
         if "data2" in resp_json:
             decrypted_json = decrypt_data2(resp_json["data2"])
             log_print(decrypted_json)  # 替换原来的print
+
+            # 抢到票时上报统计（同一轮任务只上报一次）
+            if is_exchange_success(decrypted_json):
+                with _grab_lock:
+                    should_report = not _grab_reported
+                    _grab_reported = True
+                if should_report:
+                    log_print("🎉 抢到票了！正在上报统计...")
+                    stats_client.report_grab(EXCHANGE_ID_PLAINTEXT)
         else:
             log_print("返回中没有 data2 字段")  # 替换原来的print
     except Exception as e:
@@ -276,6 +360,9 @@ def run_exchange():
 # 修改job函数中的print语句
 def job():
     """使用线程池并发执行多次兑换任务，每次请求之间间隔 timeSleep 秒"""
+    global _grab_reported
+    _grab_reported = False
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=12) as executor:
         log_print(USER_ID_PLAINTEXT)
         log_print(LOGIN_NAME_PLAINTEXT)
@@ -344,7 +431,7 @@ def daily_task_login():
         resp_json = resp.json()
         if "data2" in resp_json:
             decrypted_json = decrypt_data2(resp_json["data2"])
-            log_print(f"登录结果: {decrypted_json}")
+            log_print(format_result_text(decrypted_json, "登录"))
         else:
             log_print("登录响应中没有 data2 字段")
     except Exception as e:
@@ -408,7 +495,7 @@ def daily_task_signin(signin_number=1):
         resp_json = resp.json()
         if "data2" in resp_json:
             decrypted_json = decrypt_data2(resp_json["data2"])
-            log_print(f"第{signin_number}次签到结果: {decrypted_json}")
+            log_print(format_result_text(decrypted_json, f"第{signin_number}次签到"))
         else:
             log_print("签到响应中没有 data2 字段")
     except Exception as e:
@@ -476,7 +563,7 @@ def daily_task_comment():
         resp_json = resp.json()
         if "data2" in resp_json:
             decrypted_json = decrypt_data2(resp_json["data2"])
-            log_print(f"评论结果: {decrypted_json}")
+            log_print(format_result_text(decrypted_json, "评论"))
         else:
             log_print("评论响应中没有 data2 字段")
     except Exception as e:
@@ -538,7 +625,7 @@ def daily_task_query():
         resp_json = resp.json()
         if "data2" in resp_json:
             decrypted_json = decrypt_data2(resp_json["data2"])
-            log_print(f"查询积分结果: {decrypted_json}")
+            log_print(format_result_text(decrypted_json, "查询积分"))
         else:
             log_print("查询积分响应中没有 data2 字段")
     except Exception as e:

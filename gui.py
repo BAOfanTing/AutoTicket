@@ -13,8 +13,11 @@ import AutoTicket
 import Login
 import time
 import json
+from datetime import date
 import os
+import threading
 import updater
+import stats_client
 import qrcode
 from PIL import Image
 import io
@@ -24,64 +27,67 @@ import base64
 # 下拉框箭头图标路径（打包为 exe 后 __file__ 指向解压目录，均可生效）
 DOWN_ARROW_ICON = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icons", "down-arrow.png").replace("\\", "/")
 
-# 全局样式表：Apple 风格 UI，定义各控件颜色、圆角、字体等外观
+# 全局样式表：Google Material Design 3 UI（品牌蓝 #1a73e8 主题）
+# 定义各控件的颜色、圆角、字体与 elevation 分层，逻辑不受影响。
 APP_STYLESHEET = """
 QWidget {
-    color: #1d1d1f;
-    background: #ffffff;
-    font-size: 17px;
-    font-family: "SF Pro Display", "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Helvetica Neue", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+    color: #1f1f1f;
+    font-size: 15px;
+    font-family: "Google Sans", "Roboto", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
 }
 QWidget#mainWindow {
-    background: #ffffff;
+    background: #f8f9fa;
 }
 QLabel {
     background: transparent;
-    color: #3a3a3c;
-    font-weight: 600;
+    color: #444746;
+    font-weight: 500;
 }
 QGroupBox {
-    background: #fbfbfd;
-    border: 1px solid #e5e5ea;
-    border-radius: 18px;
+    background: #ffffff;
+    border: 1px solid #dadce0;
+    border-radius: 16px;
     margin-top: 14px;
-    color: #1d1d1f;
-    font-weight: 600;
+    padding-top: 4px;
+    color: #1f1f1f;
+    font-weight: 500;
 }
 QGroupBox::title {
     subcontrol-origin: margin;
     left: 16px;
-    padding: 0 6px;
-    background: #fbfbfd;
-    color: #6e6e73;
+    padding: 0 10px;
+    background: #f8f9fa;
+    color: #1a73e8;
 }
 QLineEdit,
 QTextEdit {
     background: #ffffff;
-    border: 1px solid #d2d2d7;
-    border-radius: 12px;
+    border: 1px solid #dadce0;
+    border-radius: 8px;
     padding: 8px 12px;
-    selection-background-color: #0a84ff;
+    color: #1f1f1f;
+    selection-background-color: #1a73e8;
     selection-color: #ffffff;
 }
 QLineEdit:focus,
 QTextEdit:focus {
-    border: 1px solid #0a84ff;
+    border: 2px solid #1a73e8;
 }
 QComboBox {
     background: #ffffff;
-    border: 1px solid #d2d2d7;
-    border-radius: 12px;
+    border: 1px solid #dadce0;
+    border-radius: 8px;
     padding: 8px 12px;
-    selection-background-color: #0a84ff;
+    color: #1f1f1f;
+    selection-background-color: #1a73e8;
     selection-color: #ffffff;
 }
 QComboBox:focus {
-    border: 1px solid #0a84ff;
+    border: 2px solid #1a73e8;
 }
 QComboBox::drop-down {
     border: none;
-    width: 28px;
+    width: 32px;
 }
 QComboBox::down-arrow {
     image: url(__DOWN_ARROW_ICON__);
@@ -90,93 +96,171 @@ QComboBox::down-arrow {
 }
 QComboBox QAbstractItemView {
     background: #ffffff;
-    border: 1px solid #d2d2d7;
-    border-radius: 10px;
+    border: 1px solid #dadce0;
+    border-radius: 8px;
     padding: 4px;
     outline: none;
 }
 QComboBox QAbstractItemView::item {
     padding: 8px 12px;
-    border-radius: 8px;
+    border-radius: 6px;
 }
 QComboBox QAbstractItemView::item:hover {
-    background: #f2f2f5;
+    background: #e8f0fe;
 }
 QComboBox QAbstractItemView::item:selected {
-    background: #0a84ff;
+    background: #1a73e8;
     color: #ffffff;
 }
 QTextEdit#logPanel {
-    color: #1d1d1f;
+    color: #1f1f1f;
+    background: #f8f9fa;
+    font-family: "Roboto Mono", "Menlo", "Consolas", monospace;
+    font-size: 12px;
 }
 QPushButton {
-    background: #f5f5f7;
-    border: 1px solid #d2d2d7;
-    border-radius: 12px;
-    padding: 8px 18px;
-    color: #1d1d1f;
+    background: #ffffff;
+    border: 1px solid #dadce0;
+    border-radius: 20px;
+    padding: 8px 22px;
+    color: #1a73e8;
     font-weight: 600;
 }
 QPushButton:hover {
-    background: #ededf0;
+    background: #e8f0fe;
 }
 QPushButton:pressed {
-    background: #e4e4e8;
+    background: #d2e3fc;
 }
 QPushButton:disabled {
-    background: #f7f7f8;
-    border: 1px solid #e5e5ea;
-    color: #a1a1aa;
+    background: #f1f3f4;
+    border: 1px solid #dadce0;
+    border-radius: 20px;
+    color: #9aa0a6;
 }
 QPushButton#primaryButton {
-    background: #007aff;
-    border: 1px solid #007aff;
+    background: #1a73e8;
+    border: 1px solid #1a73e8;
+    border-radius: 20px;
     color: #ffffff;
     font-weight: 600;
 }
 QPushButton#primaryButton:hover {
-    background: #0a84ff;
-    border-color: #0a84ff;
+    background: #1765cc;
+    border: 1px solid #1765cc;
+    border-radius: 20px;
 }
 QPushButton#primaryButton:pressed {
-    background: #0063ce;
-    border-color: #0063ce;
+    background: #185abc;
+    border: 1px solid #185abc;
+    border-radius: 20px;
 }
 QPushButton#primaryButton:disabled {
     background: #bcdcff;
-    border-color: #bcdcff;
+    border: 1px solid #bcdcff;
+    border-radius: 20px;
     color: #ffffff;
 }
 QPushButton#stopButton {
-    background: #fff5f4;
-    border: 1px solid #ffd5d2;
-    color: #ff3b30;
+    background: #ffffff;
+    border: 1px solid #dadce0;
+    border-radius: 20px;
+    color: #d93025;
     font-weight: 600;
 }
 QPushButton#stopButton:hover {
-    background: #ffeceb;
+    background: #fce8e6;
+    border: 1px solid #fad2cf;
+    border-radius: 20px;
 }
 QPushButton#stopButton:pressed {
-    background: #ffe1df;
+    background: #fad2cf;
+    border: 1px solid #f28b82;
+    border-radius: 20px;
 }
 QPushButton#qrButton {
-    background: #1f9d55;
-    border: 1px solid #1f9d55;
+    background: #1e8e3e;
+    border: 1px solid #1e8e3e;
+    border-radius: 20px;
     color: #ffffff;
     font-weight: 600;
 }
 QPushButton#qrButton:hover {
-    background: #28a85e;
-    border-color: #28a85e;
+    background: #188038;
+    border: 1px solid #188038;
+    border-radius: 20px;
 }
 QPushButton#qrButton:pressed {
-    background: #198a49;
-    border-color: #198a49;
+    background: #13732f;
+    border: 1px solid #13732f;
+    border-radius: 20px;
 }
 QPushButton#qrButton:disabled {
     background: #b8e0c5;
-    border-color: #b8e0c5;
+    border: 1px solid #b8e0c5;
+    border-radius: 20px;
     color: #ffffff;
+}
+QFrame#statCard {
+    background: #ffffff;
+    border: 1px solid #dadce0;
+    border-radius: 8px;
+}
+QLabel#statTitle {
+    color: #5f6368;
+    font-size: 10px;
+    font-weight: 500;
+}
+QFrame#avatarFrame {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #1a73e8, stop:1 #174ea6);
+    border-radius: 28px;
+}
+QLabel#avatarLabel {
+    color: #ffffff;
+    font-size: 24px;
+    font-weight: 700;
+    background: transparent;
+}
+QLabel#userNameLabel {
+    color: #1f1f1f;
+    font-size: 15px;
+    font-weight: 600;
+}
+QLabel#integralLabel {
+    color: #1e8e3e;
+    font-size: 12px;
+    font-weight: 600;
+    background: rgba(30, 142, 62, 0.08);
+    border-radius: 10px;
+    padding: 2px 10px;
+}
+QPushButton#logoutButton {
+    background: #ffffff;
+    border: 1px solid #d93025;
+    color: #d93025;
+    border-radius: 20px;
+    font-weight: 600;
+    padding: 6px 20px;
+}
+QPushButton#logoutButton:hover {
+    background: #fce8e6;
+    border: 1px solid #d93025;
+    border-radius: 20px;
+}
+QPushButton#logoutButton:disabled {
+    background: #ffffff;
+    border: 1px solid #dadce0;
+    color: #9aa0a6;
+    border-radius: 20px;
+}
+QLabel#dailyTaskDoneLabel {
+    color: #1e8e3e;
+    background: #e6f4ea;
+    border: 1px solid #a8dab5;
+    border-radius: 16px;
+    padding: 8px 24px;
+    font-size: 13px;
+    font-weight: 600;
 }
 """.replace("__DOWN_ARROW_ICON__", DOWN_ARROW_ICON)
 
@@ -204,8 +288,8 @@ class LoginDialog(QDialog):
             btn.setCheckable(True)
             btn.setMinimumHeight(38)
             btn.setStyleSheet(
-                "QPushButton { border: 1px solid #d2d2d7; border-radius: 8px; background: #f5f5f7; color: #6e6e73; font-weight: 600; }"
-                "QPushButton:checked { background: #007aff; color: #fff; border-color: #007aff; }"
+                "QPushButton { border: 1px solid #dadce0; border-radius: 20px; background: #ffffff; color: #5f6368; font-weight: 600; }"
+                "QPushButton:checked { background: #1a73e8; color: #fff; border: 1px solid #1a73e8; border-radius: 20px; }"
             )
         self.btn_password_mode.setChecked(True)
         mode_layout.addWidget(self.btn_password_mode)
@@ -230,7 +314,7 @@ class LoginDialog(QDialog):
         self.captcha_label = QLabel()
         self.captcha_label.setAlignment(Qt.AlignCenter)
         self.captcha_label.setMinimumHeight(100)
-        self.captcha_label.setStyleSheet("border: 1px solid #d2d2d7; border-radius: 12px; background: #ffffff;")
+        self.captcha_label.setStyleSheet("border: 1px solid #dadce0; border-radius: 8px; background: #f8f9fa;")
         captcha_bytes = Login.decode_captcha_image(captcha_data)
         pixmap = QPixmap()
         pixmap.loadFromData(captcha_bytes)
@@ -245,8 +329,8 @@ class LoginDialog(QDialog):
         self.btn_send_sms = QPushButton("获取验证码")
         self.btn_send_sms.setMinimumHeight(42)
         self.btn_send_sms.setStyleSheet(
-            "QPushButton { background: #007aff; color: #fff; border: 1px solid #007aff; border-radius: 8px; font-weight: 600; }"
-            "QPushButton:disabled { background: #bcdcff; border-color: #bcdcff; }"
+            "QPushButton { background: #1a73e8; color: #fff; border: 1px solid #1a73e8; border-radius: 20px; font-weight: 600; }"
+            "QPushButton:disabled { background: #bcdcff; border: 1px solid #bcdcff; border-radius: 20px; }"
         )
 
         sms_row = QHBoxLayout()
@@ -391,36 +475,36 @@ class QRCodeDialog(QDialog):
         qr_label.setStyleSheet("padding: 16px;")
 
         info_frame = QFrame()
-        info_frame.setStyleSheet("QFrame { background: #f5f5f7; border-radius: 12px; padding: 12px; }")
+        info_frame.setStyleSheet("QFrame { background: #f1f3f4; border-radius: 12px; padding: 12px; }")
         info_layout = QVBoxLayout(info_frame)
         info_layout.setSpacing(8)
 
         money_label = QLabel(f"余额: {money} 元")
-        money_label.setStyleSheet("font-size: 28px; font-weight: 700; color: #1d1d1f;")
+        money_label.setStyleSheet("font-size: 28px; font-weight: 700; color: #f9ab00;")
         money_label.setAlignment(Qt.AlignCenter)
 
         card_label = QLabel(f"交通卡号: {card_no}") if card_no else QLabel("")
         card_label.setAlignment(Qt.AlignCenter)
-        card_label.setStyleSheet("font-size: 14px; color: #6e6e73;")
+        card_label.setStyleSheet("font-size: 14px; color: #5f6368;")
 
         deadline_label = QLabel(
             f"有效期至: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(int(deadline)))}"
         ) if deadline else QLabel("")
         deadline_label.setAlignment(Qt.AlignCenter)
-        deadline_label.setStyleSheet("font-size: 14px; color: #6e6e73;")
+        deadline_label.setStyleSheet("font-size: 14px; color: #5f6368;")
 
         info_layout.addWidget(money_label)
         info_layout.addWidget(card_label)
         info_layout.addWidget(deadline_label)
 
         coupon_frame = QFrame()
-        coupon_frame.setStyleSheet("QFrame { background: #f5f5f7; border-radius: 12px; padding: 12px; }")
+        coupon_frame.setStyleSheet("QFrame { background: #f1f3f4; border-radius: 12px; padding: 12px; }")
         coupon_layout = QVBoxLayout(coupon_frame)
         coupon_layout.setSpacing(6)
 
         coupon_title = QLabel("地铁优惠券")
         coupon_title.setAlignment(Qt.AlignCenter)
-        coupon_title.setStyleSheet("font-size: 18px; font-weight: 700; color: #1d1d1f;")
+        coupon_title.setStyleSheet("font-size: 16px; font-weight: 600; color: #1f1f1f; margin-bottom: 8px;")
         coupon_layout.addWidget(coupon_title)
 
         switch_layout = QHBoxLayout()
@@ -431,9 +515,9 @@ class QRCodeDialog(QDialog):
             ("3", "6元券")
         ]
         for award_type, button_text in button_configs:
-            button = QPushButton(button_text)
+            button = QPushButton(button_text + "\n0")
             button.setCheckable(True)
-            button.setMinimumHeight(38)
+            button.setMinimumHeight(56)
             button.clicked.connect(lambda checked, t=award_type: self.switch_award_type(t))
             self.coupon_buttons[award_type] = button
             switch_layout.addWidget(button)
@@ -448,8 +532,9 @@ class QRCodeDialog(QDialog):
         close_btn = QPushButton("关闭")
         close_btn.setMinimumHeight(44)
         close_btn.setStyleSheet(
-            "QPushButton { background: #007aff; color: #fff; border: none; border-radius: 10px; font-weight: 600; font-size: 16px; }"
-            "QPushButton:hover { background: #0a84ff; }"
+            "QPushButton { background: #1a73e8; color: #fff; border: none; border-radius: 22px; font-weight: 600; font-size: 15px; }"
+            "QPushButton:hover { background: #1765cc; border-radius: 22px; }"
+            "QPushButton:pressed { background: #185abc; border-radius: 22px; }"
         )
         close_btn.clicked.connect(self.accept)
 
@@ -463,16 +548,23 @@ class QRCodeDialog(QDialog):
         self.update_coupon_button_styles()
 
     def update_coupon_button_styles(self):
+        name_map = {"1": "2元券", "2": "4元券", "3": "6元券"}
+        num_map = {
+            "1": self.subway_info.get("num_2", "0"),
+            "2": self.subway_info.get("num_4", "0"),
+            "3": self.subway_info.get("num_6", "0"),
+        }
         for award_type, button in self.coupon_buttons.items():
             is_active = award_type == self.current_award_type
             button.setChecked(is_active)
+            button.setText(f"{name_map[award_type]}\n{num_map[award_type]}")
             if is_active:
                 button.setStyleSheet(
-                    "QPushButton { background: #1f9d55; color: #ffffff; border: 1px solid #1f9d55; border-radius: 8px; font-weight: 600; }"
+                    "QPushButton { background: rgba(26,115,232,0.08); color: #1a73e8; border: 1px solid #1a73e8; border-radius: 8px; font-weight: 600; font-size: 13px; padding: 4px; }"
                 )
             else:
                 button.setStyleSheet(
-                    "QPushButton { background: #ffffff; color: #3a3a3c; border: 1px solid #d2d2d7; border-radius: 8px; font-weight: 600; }"
+                    "QPushButton { background: #ffffff; color: #444746; border: 1px solid #dadce0; border-radius: 8px; font-weight: 600; font-size: 13px; padding: 4px; }"
                 )
 
     def clear_coupon_content(self):
@@ -484,18 +576,7 @@ class QRCodeDialog(QDialog):
 
     def refresh_coupon_area(self):
         self.clear_coupon_content()
-
-        coupon_rows = [
-            ("2元券当前领取数", self.subway_info.get("num_2", "0")),
-            ("4元券当前领取数", self.subway_info.get("num_4", "0")),
-            ("6元券当前领取数", self.subway_info.get("num_6", "0")),
-        ]
-
-        for label_text, value_text in coupon_rows:
-            row_label = QLabel(f"{label_text}: {value_text}")
-            row_label.setAlignment(Qt.AlignCenter)
-            row_label.setStyleSheet("font-size: 14px; color: #3a3a3c;")
-            self.coupon_content_layout.addWidget(row_label)
+        self.update_coupon_button_styles()
 
         coupon_list = self.subway_info.get("list") if isinstance(self.subway_info.get("list"), list) else []
         if coupon_list:
@@ -507,7 +588,7 @@ class QRCodeDialog(QDialog):
         else:
             empty_label = QLabel("暂无优惠券记录")
             empty_label.setAlignment(Qt.AlignCenter)
-            empty_label.setStyleSheet("font-size: 14px; color: #6e6e73;")
+            empty_label.setStyleSheet("font-size: 14px; color: #5f6368; padding: 8px;")
             self.coupon_content_layout.addWidget(empty_label)
 
     def switch_award_type(self, award_type):
@@ -529,20 +610,30 @@ class QRCodeDialog(QDialog):
 
     def _build_coupon_detail(self, exchange_name, create_time, expire_time):
         detail_frame = QFrame()
-        detail_frame.setStyleSheet("QFrame { background: #ffffff; border-radius: 10px; padding: 8px; }")
+        detail_frame.setStyleSheet("QFrame { background: transparent; }")
         detail_layout = QVBoxLayout(detail_frame)
-        detail_layout.setSpacing(4)
+        detail_layout.setSpacing(6)
 
-        name_label = QLabel(f"券名称: {exchange_name}")
-        name_label.setStyleSheet("font-size: 14px; color: #1d1d1f;")
-        time_label = QLabel(f"领取时间: {create_time}")
-        time_label.setStyleSheet("font-size: 13px; color: #6e6e73;")
-        expire_label = QLabel(f"过期时间: {expire_time}")
-        expire_label.setStyleSheet("font-size: 13px; color: #6e6e73;")
+        rows = [
+            ("券名称", exchange_name),
+            ("领取时间", create_time),
+            ("过期时间", expire_time),
+        ]
+        for label_text, value_text in rows:
+            row_layout = QHBoxLayout()
+            row_layout.setSpacing(8)
+            row_layout.setContentsMargins(0, 0, 0, 0)
 
-        detail_layout.addWidget(name_label)
-        detail_layout.addWidget(time_label)
-        detail_layout.addWidget(expire_label)
+            lbl = QLabel(label_text)
+            lbl.setStyleSheet("font-size: 13px; color: #5f6368;")
+
+            val = QLabel(value_text)
+            val.setStyleSheet("font-size: 13px; color: #1f1f1f; font-weight: 500;")
+
+            row_layout.addWidget(lbl)
+            row_layout.addWidget(val, 1)
+            detail_layout.addLayout(row_layout)
+
         return detail_frame
 
 
@@ -618,6 +709,7 @@ class Worker(QThread):
 
     def stop(self):
         """请求线程停止（设置 running 标志为 False，wait_until_target 将退出循环）"""
+        self.running = False
 
 class DailyTaskWorker(QThread):
     """每日任务工作线程：封装签到、评论、查询积分等日常操作"""
@@ -647,6 +739,33 @@ class DailyTaskWorker(QThread):
             AutoTicket.set_log_callback(None)
             self.finished_signal.emit()
 
+class StatsPoller(QThread):
+    """统计数据轮询线程：定时拉取在线人数与抢票数，纯展示用，失败静默忽略"""
+
+    stats_signal = pyqtSignal(dict)
+
+    def __init__(self, interval=60):
+        super().__init__()
+        self.interval = interval
+        self.running = True
+
+    def run(self):
+        """线程入口：立即拉取一次，之后每隔 interval 秒拉取一次"""
+        while self.running:
+            data = stats_client.fetch_stats()
+            if data:
+                self.stats_signal.emit(data)
+            # 分片休眠，便于关闭软件时快速退出
+            for _ in range(int(self.interval * 2)):
+                if not self.running:
+                    return
+                time.sleep(0.5)
+
+    def stop(self):
+        """请求线程停止"""
+        self.running = False
+
+
 class MainWindow(QWidget):
     """主窗口，包含登录、配置参数、启动/停止任务、日志展示及绿色出行码等功能"""
 
@@ -654,6 +773,8 @@ class MainWindow(QWidget):
         super().__init__()
         self.worker = None
         self.daily_task_worker = None
+        self.stats_poller = None
+        self.stats_group = None
         self.stop_requested = False
         self.config_file = "./config.json"
         self.loading_config = False
@@ -661,8 +782,10 @@ class MainWindow(QWidget):
         self.user_id = ""
         self.user_name = ""
         self.remain_integral = 0
+        self.daily_task_done_date = ""
         self.init_ui()
         self.load_config()
+        self.setup_stats()
 
         # 启动时检查版本更新
         self.check_update()
@@ -672,36 +795,75 @@ class MainWindow(QWidget):
         self.setObjectName("mainWindow")
         self.setWindowTitle(f'AutoTicket {updater.CURRENT_VERSION} - 免费开源使用')
         self.setWindowIcon(QIcon(os.path.join(os.path.dirname(__file__), "icon.ico")))
-        self.setGeometry(100, 100, 750, 900)
-        self.setMinimumSize(750, 900)
+        self.setGeometry(100, 100, 780, 980)
+        self.setMinimumSize(760, 940)
 
-        # 创建顶部登录状态区域
+        # 创建顶部登录状态区域（圆头像 + 用户名 + 状态标签）
         auth_group = QGroupBox("登录")
         auth_outer_layout = QVBoxLayout()
         auth_outer_layout.setContentsMargins(20, 20, 20, 20)
-        auth_outer_layout.setSpacing(4)
-        auth_layout = QHBoxLayout()
-        auth_layout.setSpacing(12)
-        self.login_status_label = QLabel()
+        auth_outer_layout.setSpacing(12)
+
+        # 小程序宣传提示
+        mini_program_label = QLabel("小程序 e家AutoTicket 已上线，手机端即可使用")
+        mini_program_label.setStyleSheet("font-size: 13px; color: #5f6368;")
+        auth_outer_layout.addWidget(mini_program_label)
+
+        # 头像 + 用户信息行
+        status_row = QHBoxLayout()
+        status_row.setSpacing(16)
+
+        # 圆形头像
+        avatar_frame = QFrame()
+        avatar_frame.setObjectName("avatarFrame")
+        avatar_frame.setFixedSize(56, 56)
+        avatar_inner = QVBoxLayout(avatar_frame)
+        avatar_inner.setContentsMargins(0, 0, 0, 0)
+        self.avatar_label = QLabel("用")
+        self.avatar_label.setObjectName("avatarLabel")
+        self.avatar_label.setAlignment(Qt.AlignCenter)
+        avatar_inner.addWidget(self.avatar_label)
+
+        # 用户信息
+        status_meta = QVBoxLayout()
+        status_meta.setSpacing(4)
+
+        # 用户名 + 状态 chip
+        user_row = QHBoxLayout()
+        user_row.setSpacing(8)
+        self.user_name_label = QLabel("未登录")
+        self.user_name_label.setObjectName("userNameLabel")
+        self.status_chip = QLabel("未登录")
+        user_row.addWidget(self.user_name_label)
+        user_row.addWidget(self.status_chip)
+
+        # 积分
+        self.integral_label = QLabel("")
+        self.integral_label.setObjectName("integralLabel")
+        self.integral_label.setVisible(False)
+
+        status_meta.addLayout(user_row)
+        status_meta.addWidget(self.integral_label)
+
+        status_row.addWidget(avatar_frame)
+        status_row.addLayout(status_meta)
+        status_row.addStretch(1)
+
+        # 按钮行
+        buttons_row = QHBoxLayout()
+        buttons_row.setSpacing(8)
         self.login_button = QPushButton("登录")
         self.logout_button = QPushButton("退出登录")
         self.login_button.setObjectName("primaryButton")
+        self.logout_button.setObjectName("logoutButton")
         self.logout_button.setEnabled(False)
-        self.login_button.setMinimumHeight(48)
-        self.logout_button.setMinimumHeight(48)
-        auth_layout.addWidget(QLabel("登录状态"))
-        auth_layout.addWidget(self.login_status_label)
-        self.user_name_label = QLabel("")
-        self.user_name_label.setStyleSheet("font-size: 13px; color: #6e6e73;")
-        self.user_name_label.setVisible(False)
-        auth_layout.addWidget(self.user_name_label, 1)
-        auth_layout.addWidget(self.login_button)
-        auth_layout.addWidget(self.logout_button)
-        # 小程序宣传提示
-        mini_program_label = QLabel("小程序 e家AutoTicket 已上线，手机端即可使用")
-        mini_program_label.setStyleSheet("font-size: 13px; color: #6e6e73;")
-        auth_outer_layout.addWidget(mini_program_label)
-        auth_outer_layout.addLayout(auth_layout)
+        self.login_button.setMinimumHeight(40)
+        self.logout_button.setMinimumHeight(40)
+        buttons_row.addWidget(self.login_button)
+        buttons_row.addWidget(self.logout_button)
+
+        auth_outer_layout.addLayout(status_row)
+        auth_outer_layout.addLayout(buttons_row)
         auth_group.setLayout(auth_outer_layout)
 
         # 创建配置区域
@@ -758,22 +920,24 @@ class MainWindow(QWidget):
         self.stop_button = QPushButton("停止")
         self.daily_task_button = QPushButton("执行每日任务")
         self.qr_code_button = QPushButton("绿色出行码")
-        self.about_button = QPushButton("说明")
-        self.github_button = QPushButton("GitHub")
         self.start_button.setObjectName("primaryButton")
         self.stop_button.setObjectName("stopButton")
         self.qr_code_button.setObjectName("qrButton")
         self.stop_button.setEnabled(False)
 
-        for button in [self.start_button, self.stop_button, self.daily_task_button, self.qr_code_button, self.about_button, self.github_button]:
+        for button in [self.start_button, self.stop_button, self.daily_task_button, self.qr_code_button]:
             button.setMinimumHeight(48)
 
         button_layout.addWidget(self.start_button)
         button_layout.addWidget(self.stop_button)
         button_layout.addWidget(self.daily_task_button)
         button_layout.addWidget(self.qr_code_button)
-        button_layout.addWidget(self.about_button)
-        button_layout.addWidget(self.github_button)
+
+        # 每日任务完成状态标签
+        self.daily_task_done_label = QLabel("✓ 每日任务已完成")
+        self.daily_task_done_label.setObjectName("dailyTaskDoneLabel")
+        self.daily_task_done_label.setAlignment(Qt.AlignCenter)
+        self.daily_task_done_label.setVisible(False)
 
         # 创建日志显示区域
         log_group = QGroupBox("运行日志")
@@ -787,13 +951,19 @@ class MainWindow(QWidget):
         log_layout.addWidget(self.log_display)
         log_group.setLayout(log_layout)
 
+        # 实时统计区域（未配置统计服务时整体隐藏）
+        self.stats_group = self.build_stats_group()
+        self.stats_group.setVisible(False)
+
         # 主布局
         main_layout = QVBoxLayout()
         main_layout.setContentsMargins(24, 24, 24, 24)
         main_layout.setSpacing(16)
         main_layout.addWidget(auth_group)
+        main_layout.addWidget(self.stats_group)
         main_layout.addWidget(config_group)
         main_layout.addLayout(button_layout)
+        main_layout.addWidget(self.daily_task_done_label)
         main_layout.addWidget(log_group)
         self.setLayout(main_layout)
 
@@ -804,8 +974,6 @@ class MainWindow(QWidget):
         self.stop_button.clicked.connect(self.stop_program)
         self.daily_task_button.clicked.connect(self.execute_daily_task)
         self.qr_code_button.clicked.connect(self.show_qr_code)
-        self.about_button.clicked.connect(self.show_about)
-        self.github_button.clicked.connect(self.open_github)
 
         #输入后保存ses_id和login_name
         self.login_name_edit.textChanged.connect(self.save_config)
@@ -864,28 +1032,123 @@ class MainWindow(QWidget):
         AutoTicket.SES_ID = ""
 
     def refresh_login_state(self):
-        """根据登录状态更新界面 UI：按钮启用/禁用、状态标签文字和颜色，显示用户姓名"""
+        """根据登录状态更新界面 UI：头像、用户名、状态 chip、积分显示"""
+        chip_ok_style = "color: #1e8e3e; background: rgba(30, 142, 62, 0.12); border-radius: 10px; padding: 2px 10px; font-size: 11px; font-weight: 600;"
+        chip_bad_style = "color: #d93025; background: rgba(217, 48, 37, 0.12); border-radius: 10px; padding: 2px 10px; font-size: 11px; font-weight: 600;"
+
         if self.has_valid_login():
-            self.login_status_label.setText("已登录")
-            self.login_status_label.setStyleSheet("color: #1f9d55; font-weight: 700;")
+            # 头像：用户名首字符
+            name = self.user_name or "用"
+            self.avatar_label.setText(name[0])
+            self.user_name_label.setText(self.user_name or "已登录")
+            self.status_chip.setText("已登录")
+            self.status_chip.setStyleSheet(chip_ok_style)
+            # 积分
+            if self.remain_integral > 0:
+                self.integral_label.setText(f"积分 · {self.remain_integral}")
+                self.integral_label.setVisible(True)
+            else:
+                self.integral_label.setVisible(False)
+            # 按钮
             self.logout_button.setEnabled(True)
             self.start_button.setEnabled(True)
             self.qr_code_button.setEnabled(True)
-            if self.user_name:
-                text = f"当前用户: {self.user_name}"
-                if self.remain_integral > 0:
-                    text += f"  积分: {self.remain_integral}"
-                self.user_name_label.setText(text)
-                self.user_name_label.setVisible(True)
-            else:
-                self.user_name_label.setVisible(False)
         else:
-            self.login_status_label.setText("未登录")
-            self.login_status_label.setStyleSheet("color: #d93025; font-weight: 700;")
+            # 未登录
+            self.avatar_label.setText("用")
+            self.user_name_label.setText("未登录")
+            self.status_chip.setText("未登录")
+            self.status_chip.setStyleSheet(chip_bad_style)
+            self.integral_label.setVisible(False)
+            # 按钮
             self.logout_button.setEnabled(False)
             self.start_button.setEnabled(False)
             self.qr_code_button.setEnabled(False)
-            self.user_name_label.setVisible(False)
+
+    # ================= 实时统计 =================
+    def build_stats_group(self):
+        """构建实时统计卡片区域：在线人数 + 各面额抢到数（紧凑版）"""
+        stats_group = QGroupBox("实时统计")
+        stats_outer = QVBoxLayout()
+        stats_outer.setContentsMargins(16, 10, 16, 10)
+        stats_outer.setSpacing(0)
+
+        cards_layout = QHBoxLayout()
+        cards_layout.setSpacing(8)
+
+        self.stat_labels = {}
+        card_defs = [
+            ("online", "在线人数", "#1e8e3e"),
+            ("9", "2元券", "#1f1f1f"),
+            ("10", "4元券", "#1f1f1f"),
+            ("11", "6元券", "#1f1f1f"),
+        ]
+        for key, title, color in card_defs:
+            card = QFrame()
+            card.setObjectName("statCard")
+            card_layout = QVBoxLayout(card)
+            card_layout.setContentsMargins(6, 8, 6, 8)
+            card_layout.setSpacing(2)
+
+            title_label = QLabel(title)
+            title_label.setObjectName("statTitle")
+            title_label.setAlignment(Qt.AlignCenter)
+
+            value_label = QLabel("--")
+            value_label.setAlignment(Qt.AlignCenter)
+            value_label.setStyleSheet(f"font-size: 18px; font-weight: 700; color: {color};")
+
+            card_layout.addWidget(title_label)
+            card_layout.addWidget(value_label)
+            self.stat_labels[key] = value_label
+            cards_layout.addWidget(card, 1)
+
+        stats_outer.addLayout(cards_layout)
+        stats_group.setLayout(stats_outer)
+        return stats_group
+
+    def setup_stats(self):
+        """统计服务已配置时显示统计面板、上报上线并启动轮询"""
+        if not stats_client.is_enabled():
+            self.stats_group.setVisible(False)
+            return
+
+        self.stats_group.setVisible(True)
+        # 上报上线放到后台线程，避免网络请求拖慢软件启动
+        threading.Thread(target=stats_client.report_online, args=("open",), daemon=True).start()
+
+        self.stats_poller = StatsPoller(60)
+        self.stats_poller.stats_signal.connect(self.update_stats_display)
+        self.stats_poller.start()
+
+    def update_stats_display(self, data):
+        """把拉取到的统计数据刷新到卡片上"""
+        try:
+            self.stat_labels["online"].setText(str(data.get("online", 0)))
+            by_type = data.get("by_type") or {}
+            for key in ("9", "10", "11"):
+                self.stat_labels[key].setText(str(by_type.get(key, 0)))
+        except Exception:
+            pass
+
+    def closeEvent(self, event):
+        """关闭窗口：停止后台线程并上报下线"""
+        try:
+            if self.stats_poller:
+                self.stats_poller.stop()
+            if self.worker:
+                self.worker.stop()
+        except Exception:
+            pass
+
+        # 上报下线（超时 1 秒，失败不影响退出）
+        try:
+            if stats_client.is_enabled():
+                stats_client.report_offline()
+        except Exception:
+            pass
+
+        event.accept()
 
     def login(self):
         """弹出登录对话框，完成验证码获取→用户输入→登录提交→自动回填信息的完整流程"""
@@ -980,6 +1243,7 @@ class MainWindow(QWidget):
         self.user_id = ""
         self.user_name = ""
         self.remain_integral = 0
+        self.daily_task_done_date = ""
         self.login_name_edit.clear()
         self.ses_id_edit.clear()
         AutoTicket.LOGIN_NAME_PLAINTEXT = ""
@@ -1113,6 +1377,7 @@ class MainWindow(QWidget):
         self.stop_button.setEnabled(False)
         self.daily_task_button.setEnabled(False)
 
+        self.daily_task_done_label.setVisible(False)
         self.daily_task_worker = DailyTaskWorker(login_name, user_id, ses_id, exchange_id)
         self.daily_task_worker.log_signal.connect(self.update_log)
         self.daily_task_worker.finished_signal.connect(self.daily_task_finished)
@@ -1123,6 +1388,9 @@ class MainWindow(QWidget):
         self.start_button.setEnabled(True)
         self.stop_button.setEnabled(False)
         self.daily_task_button.setEnabled(True)
+        self.daily_task_done_date = date.today().isoformat()
+        self.save_config()
+        self.daily_task_done_label.setVisible(True)
         self.update_log("每日任务执行完成")
         self.daily_task_worker = None
         
@@ -1154,37 +1422,15 @@ class MainWindow(QWidget):
             "exchange_id": self.exchange_id_edit.currentData(),
             "run_count": self.run_count_edit.text(),
             "time_sleep": self.time_sleep_edit.text(),
+            # 统计相关：匿名标识与服务端地址，避免被本次写入覆盖
+            "client_id": stats_client.get_client_id(),
+            "stats_api_base": stats_client.get_api_base(),
+            # 每日任务完成日期（当天有效）
+            "daily_task_done_date": self.daily_task_done_date,
         }
         with open(self.config_file, 'w', encoding='utf-8') as f:
             json.dump(config, f, indent=4, ensure_ascii=False)
         self.refresh_login_state()
-    
-    def show_about(self):
-        """弹出"关于"对话框，显示软件说明与免责声明"""
-        QMessageBox.information(
-            self,
-            "作者: BAOfanTing 软件说明",
-            "AutoTicket 是一个用于辅助填写登录信息、定时执行兑换任务与每日任务的开源工具。\n\n"
-            "用途说明：\n"
-            "- 支持保存 login_name、ses_id 等本地配置\n"
-            "- 支持账号登录后自动回填会话信息\n"
-            "- 支持定时启动兑换任务与执行每日任务\n\n"
-            "开源协议：\n"
-            "- 本项目基于 MIT License 开源，详见仓库中的 LICENSE 文件\n\n"
-            "使用说明：\n"
-            "- 本软件仅供学习、研究与技术交流使用\n"
-            "- 请在遵守相关法律法规、平台规则和服务条款的前提下使用\n\n"
-            "免责声明：\n"
-            "- 软件按“原样”提供，不附带任何明示或暗示担保\n"
-            "- 因使用本软件造成的任何直接或间接后果，开发者不承担责任\n"
-            "- 如他人将本项目代码用于商业用途或不当用途，由使用者自行承担责任"
-        )
-
-    def open_github(self):
-        """在浏览器中打开项目的 GitHub 仓库页面"""
-        import webbrowser
-        github_url = "https://github.com/BAOfanTing/AutoTicket"
-        webbrowser.open(github_url)
     
     def load_config(self):
         """从本地 config.json 加载保存的配置（login_name、ses_id、exchange_id 等）"""
@@ -1209,6 +1455,7 @@ class MainWindow(QWidget):
                     self.run_count_edit.setText(config["run_count"])
                 if "time_sleep" in config:
                     self.time_sleep_edit.setText(config["time_sleep"])
+                self.daily_task_done_date = config.get("daily_task_done_date", "")
             finally:
                 self.loading_config = False
 
@@ -1216,7 +1463,12 @@ class MainWindow(QWidget):
             self.is_logged_in = False
             self.user_id = ""
             self.user_name = ""
+            self.daily_task_done_date = ""
         self.refresh_login_state()
+
+        # 如果当天已完成每日任务，恢复显示标签
+        if self.daily_task_done_date == date.today().isoformat():
+            self.daily_task_done_label.setVisible(True)
 
         # 如果标记已登录，启动后验证 ses_id 是否仍有效
         if self.is_logged_in and self.login_name_edit.text().strip() and self.ses_id_edit.text().strip():

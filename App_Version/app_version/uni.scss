@@ -1,1 +1,43 @@
-/* 全局样式变量，可按需扩展 */
+/* ============================================================
+   Material Design 3 设计令牌 —— Google 品牌蓝主题
+   供所有页面共享，保持视觉一致性。
+   仅定义视觉变量，不涉及任何业务逻辑。
+   ============================================================ */
+
+/* ---------- 主色与状态色（Google Material 3） ---------- */
+$md-primary:        #1a73e8;   /* Google 品牌蓝，主操作色 */
+$md-primary-dark:   #1765cc;   /* 按压/深色态 */
+$md-primary-press:  rgba(26, 115, 232, 0.10); /* 主色透明叠加层 */
+
+$md-on-primary:        #ffffff;              /* 主色上的文字 */
+$md-on-surface:        #1f1f1f;              /* 主要内容文字 */
+$md-on-surface-muted:  #444746;              /* 次要文字 */
+$md-on-surface-variant:#444746;             /* 辅助文字 / 标签 */
+
+$md-success:          #1e8e3e;   /* 成功 / 已登录 / 绿色出行 */
+$md-error:            #d93025;   /* 错误 / 危险操作 */
+$md-warning:          #f9ab00;   /* 警告 / 金额高亮 */
+
+/* ---------- 中性分层（Material 3 surface 体系） ---------- */
+$md-background:     #f8f9fa;     /* 页面背景 */
+$md-surface:        #ffffff;     /* 卡片 / 容器 */
+$md-surface-variant:#f1f3f4;     /* 次级容器 / 输入框填充 */
+$md-outline:        #dadce0;     /* 描边色 */
+$md-divider:        #e8eaed;     /* 分割线 */
+
+/* ---------- 圆角（Material 3 大圆角体系） ---------- */
+$md-radius-s:   12rpx;    /* 小组件 / 输入框 */
+$md-radius-m:   16rpx;    /* 按钮 / Chip */
+$md-radius-l:   24rpx;    /* 卡片 */
+$md-radius-xl:  28rpx;    /* 大卡片 / 药丸 */
+$md-radius-pill:9999rpx;  /* 药丸按钮 */
+
+/* ---------- 阴影（Material 3 elevation 分层） ---------- */
+$md-shadow-1: 0 1rpx 2rpx rgba(60,64,67,.30), 0 1rpx 3rpx 1rpx rgba(60,64,67,.15);
+$md-shadow-2: 0 1rpx 2rpx rgba(60,64,67,.30), 0 2rpx 6rpx 2rpx rgba(60,64,67,.15);
+$md-shadow-3: 0 4rpx 8rpx 2rpx rgba(60,64,67,.15), 0 1rpx 3rpx rgba(60,64,67,.30);
+
+/* ---------- 字体 ---------- */
+/* Google Sans / Roboto 优先，回退系统中文字体 */
+$md-font-family: "Google Sans", "Roboto", -apple-system, "PingFang SC",
+                 "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
