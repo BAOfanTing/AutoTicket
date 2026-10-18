@@ -10,7 +10,7 @@
     <a href="#-javascript-版本"><img src="https://img.shields.io/badge/Node.js-14%2B-green?logo=nodedotjs" /></a>
     <a href="#-微信小程序"><img src="https://img.shields.io/badge/WeChat-%E5%B0%8F%E7%A8%8B%E5%BA%8F-07c160?logo=wechat" /></a>
     <a href="#"><img src="https://img.shields.io/badge/%E5%B0%8F%E7%A8%8B%E5%BA%8F-e%E5%AE%B6AutoTicket-07c160" /></a>
-    <a href="#"><img src="https://img.shields.io/badge/version-1.1.1-blue" /></a>
+    <a href="#"><img src="https://img.shields.io/badge/version-2.0.0-blue" /></a>
     <a href="https://t.me/+E-y4vr3ucyM0OTVl"><img src="https://img.shields.io/badge/Telegram-交流群-2ca5e0?logo=telegram" /></a>
     <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-yellow" /></a>
   </p>
@@ -59,6 +59,8 @@ AutoTicket 是一个针对 **e家 APP** 的自动化脚本集合。通过对 APP
 | ✅ 钉钉通知       | ✗     | ✓         | ✗     | 执行结果推送                |
 | ✅ 绿色出行码     | ✓     | ✗         | ✓     | 乘车码展示                  |
 | ✅ 地铁优惠券查询 | ✓     | ✗         | ✓     | 查询2/4/6元地铁券余量及详情 |
+| ✅ 实时统计       | ✓     | ✗         | ✓     | 在线人数 / 各面额抢到数     |
+| ✅ 多账号并发     | ✓     | ✗         | ✓     | 最多 3 个账号独立运行       |
 | ✅ 自动更新       | ✓     | ✗         | ✗     | 检查 GitHub 新版本          |
 
 ---
@@ -179,7 +181,7 @@ AutoTicket/
 ├── Decoder.py                   # Python 解密模块 - data2 解密
 ├── gui.py                       # Python 图形界面（PyQt5）
 ├── updater.py                   # Python 自动更新模块
-├── stats_client.py              # 在线人数/抢票数统计上报模块（需配置服务端地址）
+├── stats_client.py              # 在线人数/抢票数统计上报模块（默认地址已内置，可留空关闭）
 ├── docs/
 │   └── 数据统计接口对接文档.md    # 服务端接口定义（供服务端开发者参考）
 ├── requirements.txt             # Python 依赖
@@ -252,6 +254,24 @@ AutoTicket/
 ---
 
 ## 📜 更新日志
+
+### v2.0.0 (2026-10-18)
+
+- 新增 **实时统计**（Python GUI / 小程序）：在线人数与 2/4/6 元券抢到数
+  - 服务端自建（Python + SQLite），支持 nginx + HTTPS 反代
+  - 在线人数为滑动窗口统计（2 分钟内有心跳才算在线），多账号各占一条记录
+  - 抢票上报采用 `request_id` 幂等键，网络重试不会重复计数
+  - 统计模块受服务端开关控制，可通过后台一键隐藏/显示
+- **登录界面重做**（Python）：竖向表单布局、验证码图片等比缩放、中文按钮、移除标题栏问号
+- **多账号体验优化**
+  - 启动时自动选中一个已登录账号，选中槽位显示蓝色边框 + 浅蓝底
+  - 未登录时禁用「启动」「执行每日任务」，避免点了才弹错误框
+- **每日任务判重优化**：当天已签到（接口返回「已到积分上限」）不再显示为失败，正确标记为已完成
+- **修复**：登录/退出后焦点丢失导致快捷键失效
+- **修复**：抢票数少算（并发抢到多张票时只上报 1 张）
+- **修复**：短信验证码发送时 `phone` 变量未定义导致崩溃
+- **修复**：运行日志与优惠券区域布局挤压
+- 版本号升级为 `2.0.0`
 
 ### v1.1.1 (2026-08-01)
 

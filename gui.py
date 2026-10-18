@@ -6,13 +6,15 @@ gui.py - AutoTicket 图形界面主模块
 import sys
 from PyQt5.QtWidgets import (QApplication, QWidget, QLabel, QLineEdit, QComboBox, QPushButton,
                              QTextEdit, QVBoxLayout, QHBoxLayout, QGroupBox, QFormLayout,
-                             QMessageBox, QDialog, QDialogButtonBox, QFrame)
+                             QMessageBox, QDialog, QDialogButtonBox, QFrame, QSizePolicy,
+                             QScrollArea)
 from PyQt5.QtCore import QThread, pyqtSignal, QDateTime, QTimer, Qt
 from PyQt5.QtGui import QIcon, QPixmap, QImage
 import AutoTicket
 import Login
 import time
 import json
+import html
 from datetime import date
 import os
 import threading
@@ -21,6 +23,20 @@ import stats_client
 import qrcode
 from PIL import Image
 import io
+
+
+def safe_int(value, default=0):
+    """把接口返回的积分等字段安全转成 int。
+
+    接口可能返回字符串、空串、带小数点的字符串甚至 None，
+    直接 int() 会抛 ValueError/TypeError 导致界面崩掉，这里统一兜底。
+    """
+    if value is None:
+        return default
+    try:
+        return int(float(str(value).strip() or default))
+    except (ValueError, TypeError):
+        return default
 import base64
 # pyinstaller --onefile --windowed --icon=./icon.ico -n AutoTicket gui.py
 
@@ -211,57 +227,6 @@ QLabel#statTitle {
     font-size: 10px;
     font-weight: 500;
 }
-QFrame#avatarFrame {
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #1a73e8, stop:1 #174ea6);
-    border-radius: 28px;
-}
-QLabel#avatarLabel {
-    color: #ffffff;
-    font-size: 24px;
-    font-weight: 700;
-    background: transparent;
-}
-QLabel#userNameLabel {
-    color: #1f1f1f;
-    font-size: 15px;
-    font-weight: 600;
-}
-QLabel#integralLabel {
-    color: #1e8e3e;
-    font-size: 12px;
-    font-weight: 600;
-    background: rgba(30, 142, 62, 0.08);
-    border-radius: 10px;
-    padding: 2px 10px;
-}
-QPushButton#logoutButton {
-    background: #ffffff;
-    border: 1px solid #d93025;
-    color: #d93025;
-    border-radius: 20px;
-    font-weight: 600;
-    padding: 6px 20px;
-}
-QPushButton#logoutButton:hover {
-    background: #fce8e6;
-    border: 1px solid #d93025;
-    border-radius: 20px;
-}
-QPushButton#logoutButton:disabled {
-    background: #ffffff;
-    border: 1px solid #dadce0;
-    color: #9aa0a6;
-    border-radius: 20px;
-}
-QLabel#dailyTaskDoneLabel {
-    color: #1e8e3e;
-    background: #e6f4ea;
-    border: 1px solid #a8dab5;
-    border-radius: 16px;
-    padding: 8px 24px;
-    font-size: 13px;
-    font-weight: 600;
-}
 """.replace("__DOWN_ARROW_ICON__", DOWN_ARROW_ICON)
 
 class LoginDialog(QDialog):
@@ -271,86 +236,165 @@ class LoginDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("账号登录")
         self.setModal(True)
-        self.setMinimumWidth(400)
+        # 去掉标题栏的问号按钮
+        self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+        self.setMinimumWidth(420)
+        self.setStyleSheet("QDialog { background: #ffffff; }")
         self.captcha_data = captcha_data
         self.sms_countdown_sec = 0
         self.sms_timer = QTimer(self)
         self.sms_timer.timeout.connect(self._on_sms_timer)
 
-        layout = QVBoxLayout()
-        layout.setSpacing(12)
+        # 保存"密码/短信"相关控件，供 _switch_mode 显隐（不再靠遍历表单项找文字）
+        self._password_widgets = []
+        self._sms_widgets = []
 
-        # 登录方式切换
+        layout = QVBoxLayout()
+        layout.setContentsMargins(28, 24, 28, 20)
+        layout.setSpacing(16)
+
+        # ---------- 顶部标题 ----------
+        title = QLabel("账号登录")
+        title.setStyleSheet("font-size: 20px; font-weight: 700; color: #1f1f1f;")
+        subtitle = QLabel("请使用手机号完成登录")
+        subtitle.setStyleSheet("font-size: 12px; color: #5f6368;")
+        layout.addWidget(title)
+        layout.addWidget(subtitle)
+
+        # ---------- 登录方式切换（分段按钮）----------
         mode_layout = QHBoxLayout()
+        mode_layout.setSpacing(0)
         self.btn_password_mode = QPushButton("密码登录")
         self.btn_sms_mode = QPushButton("短信验证码登录")
         for btn in [self.btn_password_mode, self.btn_sms_mode]:
             btn.setCheckable(True)
             btn.setMinimumHeight(38)
+            btn.setCursor(Qt.PointingHandCursor)
             btn.setStyleSheet(
-                "QPushButton { border: 1px solid #dadce0; border-radius: 20px; background: #ffffff; color: #5f6368; font-weight: 600; }"
-                "QPushButton:checked { background: #1a73e8; color: #fff; border: 1px solid #1a73e8; border-radius: 20px; }"
+                "QPushButton { border: none; background: transparent; color: #444746;"
+                " font-weight: 600; font-size: 13px; border-radius: 17px; }"
+                "QPushButton:checked { background: #ffffff; color: #1a73e8;"
+                " border: 1px solid #dadce0; }"
             )
         self.btn_password_mode.setChecked(True)
         mode_layout.addWidget(self.btn_password_mode)
         mode_layout.addWidget(self.btn_sms_mode)
-        layout.addLayout(mode_layout)
 
-        form_layout = QFormLayout()
-        self.form_layout = form_layout  # 供 _switch_mode 使用
-        form_layout.setHorizontalSpacing(18)
-        form_layout.setVerticalSpacing(14)
+        mode_frame = QFrame()
+        mode_frame.setObjectName("modeFrame")
+        mode_frame.setLayout(mode_layout)
+        mode_frame.setStyleSheet(
+            "QFrame#modeFrame { background: #f1f3f4; border-radius: 19px; padding: 4px; }"
+        )
+        layout.addWidget(mode_frame)
 
-        # 手机号（共用）
+        # ---------- 表单 ----------
+        form = QVBoxLayout()
+        form.setSpacing(12)
+
+        # 手机号
+        form.addWidget(self._make_label("手机号"))
         self.phone_edit = QLineEdit()
         self.phone_edit.setPlaceholderText("请输入手机号")
+        form.addWidget(self.phone_edit)
 
         # 密码（密码模式）
+        self.password_label = self._make_label("密码")
         self.password_edit = QLineEdit()
         self.password_edit.setPlaceholderText("请输入密码")
         self.password_edit.setEchoMode(QLineEdit.Password)
+        form.addWidget(self.password_label)
+        form.addWidget(self.password_edit)
+        self._password_widgets = [self.password_label, self.password_edit]
 
-        # 图形验证码
+        # 图形验证码：图片和输入框并排，图片保持清晰
+        form.addWidget(self._make_label("验证码"))
+        captcha_row = QHBoxLayout()
+        captcha_row.setSpacing(12)
+
         self.captcha_label = QLabel()
         self.captcha_label.setAlignment(Qt.AlignCenter)
-        self.captcha_label.setMinimumHeight(100)
-        self.captcha_label.setStyleSheet("border: 1px solid #dadce0; border-radius: 8px; background: #f8f9fa;")
+        self.captcha_label.setFixedSize(150, 62)
+        self.captcha_label.setStyleSheet(
+            "border: 1px solid #dadce0; border-radius: 8px; background: #f8f9fa;"
+        )
         captcha_bytes = Login.decode_captcha_image(captcha_data)
         pixmap = QPixmap()
         pixmap.loadFromData(captcha_bytes)
-        self.captcha_label.setPixmap(pixmap)
+        if not pixmap.isNull():
+            # 按比例缩放，避免拉伸导致模糊
+            self.captcha_label.setPixmap(
+                pixmap.scaled(148, 60, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            )
+        captcha_row.addWidget(self.captcha_label)
 
         self.captcha_edit = QLineEdit()
         self.captcha_edit.setPlaceholderText("请输入图形验证码")
+        captcha_row.addWidget(self.captcha_edit, 1)
+        form.addLayout(captcha_row)
 
         # 短信验证码（短信模式）
+        self.sms_label = self._make_label("短信验证码")
         self.sms_code_edit = QLineEdit()
         self.sms_code_edit.setPlaceholderText("请输入短信验证码")
         self.btn_send_sms = QPushButton("获取验证码")
         self.btn_send_sms.setMinimumHeight(42)
+        self.btn_send_sms.setMinimumWidth(120)
+        self.btn_send_sms.setCursor(Qt.PointingHandCursor)
         self.btn_send_sms.setStyleSheet(
-            "QPushButton { background: #1a73e8; color: #fff; border: 1px solid #1a73e8; border-radius: 20px; font-weight: 600; }"
-            "QPushButton:disabled { background: #bcdcff; border: 1px solid #bcdcff; border-radius: 20px; }"
+            "QPushButton { background: #1a73e8; color: #fff; border: 1px solid #1a73e8;"
+            " border-radius: 8px; font-weight: 600; font-size: 13px; }"
+            "QPushButton:hover { background: #1765cc; }"
+            "QPushButton:disabled { background: #bcdcff; border: 1px solid #bcdcff; color: #ffffff; }"
         )
 
         sms_row = QHBoxLayout()
+        sms_row.setSpacing(12)
         sms_row.addWidget(self.sms_code_edit, 1)
         sms_row.addWidget(self.btn_send_sms)
+        sms_row_frame = QFrame()
+        sms_row_frame.setLayout(sms_row)
+        sms_row_frame.setStyleSheet("QFrame { border: none; }")
+
+        form.addWidget(self.sms_label)
+        form.addWidget(sms_row_frame)
+        self._sms_widgets = [self.sms_label, sms_row_frame]
 
         for line_edit in [self.phone_edit, self.password_edit, self.captcha_edit, self.sms_code_edit]:
             line_edit.setMinimumHeight(42)
+            line_edit.setStyleSheet(
+                "QLineEdit { background: #ffffff; border: 1px solid #dadce0; border-radius: 8px;"
+                " padding: 8px 12px; font-size: 13px; color: #1f1f1f; }"
+                "QLineEdit:focus { border: 1px solid #1a73e8; }"
+            )
 
-        form_layout.addRow(QLabel("手机号"), self.phone_edit)
-        form_layout.addRow(QLabel("密码"), self.password_edit)
-        form_layout.addRow(QLabel("验证码"), self.captcha_label)
-        form_layout.addRow(QLabel("输入验证码"), self.captcha_edit)
-        form_layout.addRow(QLabel("短信验证码"), sms_row)
+        layout.addLayout(form)
+        layout.addSpacing(4)
 
-        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        # ---------- 底部按钮 ----------
+        button_box = QDialogButtonBox()
+        ok_btn = button_box.addButton("登录", QDialogButtonBox.AcceptRole)
+        cancel_btn = button_box.addButton("取消", QDialogButtonBox.RejectRole)
+        ok_btn.setObjectName("loginOkBtn")
+        ok_btn.setMinimumHeight(40)
+        ok_btn.setMinimumWidth(110)
+        ok_btn.setCursor(Qt.PointingHandCursor)
+        ok_btn.setStyleSheet(
+            "QPushButton { background: #1a73e8; color: #fff; border: 1px solid #1a73e8;"
+            " border-radius: 8px; font-weight: 600; font-size: 13px; }"
+            "QPushButton:hover { background: #1765cc; }"
+            "QPushButton:pressed { background: #1456a8; }"
+        )
+        cancel_btn.setMinimumHeight(40)
+        cancel_btn.setMinimumWidth(90)
+        cancel_btn.setCursor(Qt.PointingHandCursor)
+        cancel_btn.setStyleSheet(
+            "QPushButton { background: transparent; color: #5f6368; border: 1px solid #dadce0;"
+            " border-radius: 8px; font-weight: 600; font-size: 13px; }"
+            "QPushButton:hover { background: #f1f3f4; }"
+        )
         button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
-
-        layout.addLayout(form_layout)
         layout.addWidget(button_box)
         self.setLayout(layout)
 
@@ -362,39 +406,26 @@ class LoginDialog(QDialog):
         # 初始状态（默认密码模式）
         self._switch_mode("password")
 
+    @staticmethod
+    def _make_label(text):
+        """表单小标题"""
+        label = QLabel(text)
+        label.setStyleSheet("font-size: 12px; color: #444746; font-weight: 600;")
+        return label
+
     def _switch_mode(self, mode):
-        """切换密码登录/短信验证码登录模式，控制对应输入行的显隐"""
+        """切换密码登录/短信验证码登录模式，控制对应输入控件的显隐"""
         self.login_mode = mode
         self.btn_password_mode.setChecked(mode == "password")
         self.btn_sms_mode.setChecked(mode == "sms")
-        # 密码行显隐
-        for i in range(self.form_layout.rowCount()):
-            label_item = self.form_layout.itemAt(i, QFormLayout.LabelRole)
-            if label_item and label_item.widget() and label_item.widget().text() == "密码":
-                label_item.widget().setVisible(mode == "password")
-                field_item = self.form_layout.itemAt(i, QFormLayout.FieldRole)
-                if field_item:
-                    w = field_item.widget()
-                    if w:
-                        w.setVisible(mode == "password")
-                break
-        # 短信验证码行显隐
-        for i in range(self.form_layout.rowCount()):
-            label_item = self.form_layout.itemAt(i, QFormLayout.LabelRole)
-            if label_item and label_item.widget() and label_item.widget().text() == "短信验证码":
-                label_item.widget().setVisible(mode == "sms")
-                field_item = self.form_layout.itemAt(i, QFormLayout.FieldRole)
-                if field_item:
-                    w = field_item.widget()
-                    if w:
-                        w.setVisible(mode == "sms")
-                    else:
-                        for j in range(field_item.layout().count()):
-                            field_item.layout().itemAt(j).widget().setVisible(mode == "sms")
-                break
+        for w in self._password_widgets:
+            w.setVisible(mode == "password")
+        for w in self._sms_widgets:
+            w.setVisible(mode == "sms")
 
     def _on_send_sms(self):
         """点击"获取验证码"按钮：校验输入、调用 SMS 接口、启动倒计时"""
+        phone = self.phone_edit.text().strip()
         captcha = self.captcha_edit.text().strip()
         if not phone:
             QMessageBox.warning(self, "输入错误", "请先输入手机号")
@@ -461,7 +492,10 @@ class QRCodeDialog(QDialog):
         self.coupon_buttons = {}
 
         layout = QVBoxLayout()
-        layout.setAlignment(Qt.AlignCenter)
+        # 不设 AlignCenter：垂直居中会把各区块挤压在一起，
+        # 改为自上而下自然排列，末尾补弹性空间
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(14)
 
         if qrcode_image.startswith('data:image'):
             qrcode_image = qrcode_image.split(',', 1)[1]
@@ -475,21 +509,29 @@ class QRCodeDialog(QDialog):
         qr_label.setStyleSheet("padding: 16px;")
 
         info_frame = QFrame()
-        info_frame.setStyleSheet("QFrame { background: #f1f3f4; border-radius: 12px; padding: 12px; }")
+        info_frame.setStyleSheet("QFrame { background: #f1f3f4; border-radius: 12px; }")
         info_layout = QVBoxLayout(info_frame)
-        info_layout.setSpacing(8)
+        info_layout.setContentsMargins(16, 16, 16, 16)
+        info_layout.setSpacing(10)
 
         money_label = QLabel(f"余额: {money} 元")
         money_label.setStyleSheet("font-size: 28px; font-weight: 700; color: #f9ab00;")
         money_label.setAlignment(Qt.AlignCenter)
+        money_label.setMinimumHeight(44)
+        money_label.setWordWrap(False)
 
         card_label = QLabel(f"交通卡号: {card_no}") if card_no else QLabel("")
         card_label.setAlignment(Qt.AlignCenter)
         card_label.setStyleSheet("font-size: 14px; color: #5f6368;")
 
-        deadline_label = QLabel(
-            f"有效期至: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(int(deadline)))}"
-        ) if deadline else QLabel("")
+        # deadline 来自接口，可能是字符串或非数字，转换失败时降级为不显示
+        try:
+            deadline_text = (f"有效期至: "
+                             f"{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(int(deadline)))}"
+                             ) if deadline else ""
+        except (ValueError, TypeError, OSError, OverflowError):
+            deadline_text = f"有效期至: {deadline}" if deadline else ""
+        deadline_label = QLabel(deadline_text)
         deadline_label.setAlignment(Qt.AlignCenter)
         deadline_label.setStyleSheet("font-size: 14px; color: #5f6368;")
 
@@ -498,13 +540,15 @@ class QRCodeDialog(QDialog):
         info_layout.addWidget(deadline_label)
 
         coupon_frame = QFrame()
-        coupon_frame.setStyleSheet("QFrame { background: #f1f3f4; border-radius: 12px; padding: 12px; }")
+        coupon_frame.setStyleSheet("QFrame { background: #f1f3f4; border-radius: 12px; }")
         coupon_layout = QVBoxLayout(coupon_frame)
-        coupon_layout.setSpacing(6)
+        coupon_layout.setContentsMargins(16, 16, 16, 16)
+        coupon_layout.setSpacing(10)
 
         coupon_title = QLabel("地铁优惠券")
         coupon_title.setAlignment(Qt.AlignCenter)
-        coupon_title.setStyleSheet("font-size: 16px; font-weight: 600; color: #1f1f1f; margin-bottom: 8px;")
+        coupon_title.setStyleSheet("font-size: 16px; font-weight: 600; color: #1f1f1f;")
+        coupon_title.setMinimumHeight(28)
         coupon_layout.addWidget(coupon_title)
 
         switch_layout = QHBoxLayout()
@@ -527,7 +571,22 @@ class QRCodeDialog(QDialog):
         self.coupon_content_frame.setStyleSheet("QFrame { background: transparent; }")
         self.coupon_content_layout = QVBoxLayout(self.coupon_content_frame)
         self.coupon_content_layout.setSpacing(6)
-        coupon_layout.addWidget(self.coupon_content_frame)
+        self.coupon_content_layout.setContentsMargins(0, 0, 0, 0)
+
+        # 优惠券列表可能很多条，放进滚动区，避免把窗口撑爆或被挤压截断
+        coupon_scroll = QScrollArea()
+        coupon_scroll.setWidgetResizable(True)
+        coupon_scroll.setFrameShape(QFrame.NoFrame)
+        coupon_scroll.setMinimumHeight(150)
+        coupon_scroll.setStyleSheet(
+            "QScrollArea { background: transparent; border: none; }"
+            "QScrollBar:vertical { background: transparent; width: 8px; margin: 0; }"
+            "QScrollBar::handle:vertical { background: #dadce0; border-radius: 4px; min-height: 24px; }"
+            "QScrollBar::handle:vertical:hover { background: #bdc1c6; }"
+            "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
+        )
+        coupon_scroll.setWidget(self.coupon_content_frame)
+        coupon_layout.addWidget(coupon_scroll)
 
         close_btn = QPushButton("关闭")
         close_btn.setMinimumHeight(44)
@@ -538,9 +597,10 @@ class QRCodeDialog(QDialog):
         )
         close_btn.clicked.connect(self.accept)
 
+        # 剩余空间给优惠券区
         layout.addWidget(qr_label)
         layout.addWidget(info_frame)
-        layout.addWidget(coupon_frame)
+        layout.addWidget(coupon_frame, 1)
         layout.addWidget(close_btn)
         self.setLayout(layout)
 
@@ -650,25 +710,29 @@ class Worker(QThread):
         self.ses_id = ses_id
         self.exchange_id = exchange_id
         self.run_time_str = run_time_str
-        self.run_count = int(run_count)
-        self.time_sleep = float(time_sleep)
+        # 配置值理论上已校验过，这里再兜一层，避免脏数据让任务线程启动即崩
+        self.run_count = safe_int(run_count, 10)
+        try:
+            self.time_sleep = float(time_sleep)
+        except (ValueError, TypeError):
+            self.time_sleep = 0.2
         self.running = True
 
     def run(self):
-        """线程入口：设置全局参数 → 等待目标时间 → 执行兑换任务"""
+        """线程入口：设置线程本地参数 → 等待目标时间 → 执行兑换任务"""
         try:
             from datetime import datetime
 
-            AutoTicket.set_log_callback(self.log_signal.emit)
-            AutoTicket.LOGIN_NAME_PLAINTEXT = self.login_name
-            AutoTicket.USER_ID_PLAINTEXT = self.user_id
-            AutoTicket.SES_ID = self.ses_id
-            AutoTicket.EXCHANGE_ID_PLAINTEXT = self.exchange_id
+            # 使用线程本地上下文，多账号并发时互不干扰
+            AutoTicket.set_thread_context(
+                login_name=self.login_name,
+                user_id=self.user_id,
+                ses_id=self.ses_id,
+                exchange_id=self.exchange_id,
+                log_cb=self.log_signal.emit,
+            )
 
             run_time = datetime.strptime(self.run_time_str, "%Y-%m-%d %H:%M:%S")
-            AutoTicket.RUN_TIME = run_time
-            AutoTicket.RUN_COUNT = self.run_count
-            AutoTicket.timeSleep = self.time_sleep
 
             self.log_signal.emit(f"程序已启动，将在 {run_time} 执行兑换任务，共执行 {self.run_count} 次。")
             self.log_signal.emit("正在同步服务器时间...")
@@ -677,15 +741,20 @@ class Worker(QThread):
             offset = AutoTicket.sync_time_offset()
             self.wait_until_target(run_time, offset)
             if self.running:
-                AutoTicket.job()
+                # 显式传入 run_count / time_sleep，避免并发时全局变量被其他账号覆盖
+                AutoTicket.job(run_count=self.run_count, time_sleep=self.time_sleep)
         except Exception as e:
             self.log_signal.emit(f"任务执行出错: {str(e)}")
         finally:
-            AutoTicket.set_log_callback(None)
+            AutoTicket.clear_thread_context()
             self.finished_signal.emit()
 
     def wait_until_target(self, run_time, offset=0.0):
-        """等待直到目标时间（按服务器时间偏移校正），按距离远近动态调整休眠粒度（最远 5 分钟，最近 50 毫秒）"""
+        """等待直到目标时间（按服务器时间偏移校正）。
+
+        远距离时每 1 秒醒一次检查停止标志（保证停止/退出程序能及时响应），
+        接近目标时逐步加密到 50 毫秒，保证抢票时机精度。
+        """
         from datetime import datetime, timedelta
 
         while self.running:
@@ -694,12 +763,8 @@ class Worker(QThread):
                 return
 
             diff = (run_time - now).total_seconds()
-            if diff > 3600:
-                sleep_time = min(300, diff)
-            elif diff > 600:
-                sleep_time = min(60, diff)
-            elif diff > 60:
-                sleep_time = min(30, diff)
+            if diff > 60:
+                sleep_time = 1.0
             elif diff > 1:
                 sleep_time = min(0.5, diff)
             else:
@@ -716,6 +781,8 @@ class DailyTaskWorker(QThread):
 
     log_signal = pyqtSignal(str)
     finished_signal = pyqtSignal()
+    # 携带本次任务是否真正成功（当天已签到也算成功）
+    result_signal = pyqtSignal(bool)
 
     def __init__(self, login_name, user_id, ses_id, exchange_id):
         super().__init__()
@@ -723,38 +790,78 @@ class DailyTaskWorker(QThread):
         self.user_id = user_id or login_name
         self.ses_id = ses_id
         self.exchange_id = exchange_id
+        self.success = False
 
     def run(self):
-        """线程入口：设置全局参数并执行每日任务工作流"""
+        """线程入口：设置线程本地参数并执行每日任务工作流"""
         try:
-            AutoTicket.LOGIN_NAME_PLAINTEXT = self.login_name
-            AutoTicket.USER_ID_PLAINTEXT = self.user_id
-            AutoTicket.SES_ID = self.ses_id
-            AutoTicket.EXCHANGE_ID_PLAINTEXT = self.exchange_id
-            AutoTicket.set_log_callback(self.log_signal.emit)
-            AutoTicket.daily_task_workflow()
+            AutoTicket.set_thread_context(
+                login_name=self.login_name,
+                user_id=self.user_id,
+                ses_id=self.ses_id,
+                exchange_id=self.exchange_id,
+                log_cb=self.log_signal.emit,
+            )
+            self.success = bool(AutoTicket.daily_task_workflow())
         except Exception as e:
+            self.success = False
             self.log_signal.emit(f"执行每日任务时出错: {str(e)}")
         finally:
-            AutoTicket.set_log_callback(None)
+            AutoTicket.clear_thread_context()
+            try:
+                self.result_signal.emit(self.success)
+            except Exception:
+                pass
             self.finished_signal.emit()
 
 class StatsPoller(QThread):
-    """统计数据轮询线程：定时拉取在线人数与抢票数，纯展示用，失败静默忽略"""
+    """统计数据轮询线程：定时拉取在线人数与抢票数，纯展示用，失败静默忽略
+
+    服务端在线数是滑动窗口（2 分钟内有心跳才算在线），所以每轮
+    先给所有已登录账号发一次 open 刷新心跳，再拉取统计，
+    否则自己会掉出在线列表。多账号各自一条在线记录。
+    """
 
     stats_signal = pyqtSignal(dict)
+    # 拉取失败时发出，用于隐藏统计面板（显示全 0 比不显示更误导）
+    stats_failed_signal = pyqtSignal()
 
-    def __init__(self, interval=60):
+    def __init__(self, interval=60, account_keys_provider=None):
         super().__init__()
         self.interval = interval
         self.running = True
+        # 回调：返回当前所有已登录账号的统计标识
+        self.account_keys_provider = account_keys_provider
 
     def run(self):
         """线程入口：立即拉取一次，之后每隔 interval 秒拉取一次"""
         while self.running:
+            try:
+                keys = []
+                if self.account_keys_provider:
+                    try:
+                        keys = self.account_keys_provider() or []
+                    except Exception:
+                        keys = []
+                if keys:
+                    for key in keys:
+                        if not self.running:
+                            return
+                        stats_client.report_online("open", key)
+                else:
+                    # 尚未登录任何账号：用设备级标识占位
+                    stats_client.report_online("open")
+            except Exception:
+                pass
             data = stats_client.fetch_stats()
             if data:
                 self.stats_signal.emit(data)
+            else:
+                # 连不上服务端：通知界面隐藏面板
+                try:
+                    self.stats_failed_signal.emit()
+                except Exception:
+                    pass
             # 分片休眠，便于关闭软件时快速退出
             for _ in range(int(self.interval * 2)):
                 if not self.running:
@@ -766,29 +873,159 @@ class StatsPoller(QThread):
         self.running = False
 
 
+class AccountSlotWidget(QFrame):
+    """单个账号槽位：圆形头像 + 右侧信息面板 + 悬停红叉退出"""
+    slot_clicked = pyqtSignal(int)
+    slot_closed = pyqtSignal(int)
+
+    def __init__(self, index, parent=None):
+        super().__init__(parent)
+        self.index = index
+        self.is_logged_in = False
+        self.setFixedSize(218, 76)
+        self.setCursor(Qt.PointingHandCursor)
+
+        outer = QHBoxLayout(self)
+        outer.setContentsMargins(10, 6, 10, 6)
+        outer.setSpacing(10)
+
+        # 头像容器（用于绝对定位红叉）
+        avatar_box = QFrame()
+        avatar_box.setFixedSize(64, 64)
+
+        self.avatar_btn = QPushButton()
+        self.avatar_btn.setParent(avatar_box)
+        self.avatar_btn.setFixedSize(64, 64)
+        self.avatar_btn.setGeometry(0, 0, 64, 64)
+        self.avatar_btn.setCursor(Qt.PointingHandCursor)
+        self.avatar_btn.clicked.connect(lambda: self.slot_clicked.emit(self.index))
+
+        # 红叉退出按钮（默认隐藏）
+        self.close_btn = QPushButton("\u00d7")
+        self.close_btn.setParent(avatar_box)
+        self.close_btn.setFixedSize(20, 20)
+        self.close_btn.setGeometry(42, 0, 20, 20)
+        self.close_btn.setCursor(Qt.PointingHandCursor)
+        self.close_btn.setStyleSheet(
+            "background-color: #F56C6C; color: #ffffff; "
+            "border-radius: 10px; border: 2px solid #ffffff; "
+            "font-size: 13px; font-weight: bold; padding: 0;"
+        )
+        self.close_btn.setVisible(False)
+        self.close_btn.clicked.connect(lambda: self.slot_closed.emit(self.index))
+
+        # 右侧信息面板
+        info = QVBoxLayout()
+        info.setSpacing(4)
+        info.setContentsMargins(0, 0, 0, 0)
+
+        self.name_label = QLabel("")
+        self.name_label.setStyleSheet("font-size: 14px; font-weight: 600; color: #1f1f1f;")
+
+        self.task_label = QLabel("")
+        self.task_label.setStyleSheet("font-size: 12px; color: #5f6368;")
+
+        self.status_label = QLabel("")
+        self.status_label.setStyleSheet("font-size: 11px; font-weight: 600;")
+
+        info.addWidget(self.name_label)
+        info.addWidget(self.task_label)
+        info.addWidget(self.status_label)
+
+        outer.addWidget(avatar_box)
+        outer.addLayout(info)
+        outer.addStretch(1)
+
+    def enterEvent(self, event):
+        if self.is_logged_in:
+            self.close_btn.setVisible(True)
+        super().enterEvent(event)
+
+    def set_active_style(self, active):
+        """选中态：给整个槽位加蓝色描边 + 浅蓝背景，让人一眼看出当前操作哪个账号"""
+        if active:
+            self.setStyleSheet(
+                "AccountSlotWidget {"
+                " background: rgba(26, 115, 232, 0.08);"
+                " border: 2px solid #1a73e8;"
+                " border-radius: 12px;"
+                "}"
+            )
+        else:
+            self.setStyleSheet(
+                "AccountSlotWidget {"
+                " background: transparent;"
+                " border: 2px solid transparent;"
+                " border-radius: 12px;"
+                "}"
+            )
+
+    def leaveEvent(self, event):
+        self.close_btn.setVisible(False)
+        super().leaveEvent(event)
+
+    def mousePressEvent(self, event):
+        # 点击信息面板区域也触发切换/登录（头像和红叉各自处理自己的点击，不会冒泡到这里）
+        if event.button() == Qt.LeftButton:
+            self.slot_clicked.emit(self.index)
+        super().mousePressEvent(event)
+
+
 class MainWindow(QWidget):
     """主窗口，包含登录、配置参数、启动/停止任务、日志展示及绿色出行码等功能"""
 
     def __init__(self):
         super().__init__()
-        self.worker = None
-        self.daily_task_worker = None
+        self.workers = {}              # profile_id -> Worker（多账号并发任务）
+        self.daily_task_workers = {}   # profile_id -> DailyTaskWorker
+        self._stopped_pids = set()     # 被手动停止的 profile_id（用于区分"执行完成"和"已停止"）
         self.stats_poller = None
         self.stats_group = None
-        self.stop_requested = False
         self.config_file = "./config.json"
         self.loading_config = False
+
+        # 多开 Profile 管理
+        self.max_profiles = 3
+        self.profiles = []           # Profile 列表
+        self.active_profile_index = 0  # 当前选中的 Profile 索引
+        self.profile_slots = []      # 3个固定槽位（init_ui 中创建）
+
+        # 兼容旧版的单账号字段（会被 Profile 数据覆盖）
         self.is_logged_in = False
         self.user_id = ""
         self.user_name = ""
         self.remain_integral = 0
         self.daily_task_done_date = ""
+
         self.init_ui()
         self.load_config()
         self.setup_stats()
 
         # 启动时检查版本更新
         self.check_update()
+
+    # ==================== Profile 属性访问 ====================
+    @property
+    def current_profile(self):
+        """获取当前选中的 Profile，无则返回 None"""
+        if 0 <= self.active_profile_index < len(self.profiles):
+            return self.profiles[self.active_profile_index]
+        return None
+
+    def _get_profile_auth(self, profile=None):
+        """获取指定 Profile 的 auth 字典，默认当前 Profile"""
+        p = profile or self.current_profile
+        return p.get('auth', {}) if p else {}
+
+    def _get_profile_config(self, profile=None):
+        """获取指定 Profile 的 config 字典，默认当前 Profile"""
+        p = profile or self.current_profile
+        return p.get('config', {}) if p else {}
+
+    def _get_profile_state(self, profile=None):
+        """获取指定 Profile 的 state 字典，默认当前 Profile"""
+        p = profile or self.current_profile
+        return p.get('state', {}) if p else {}
 
     def init_ui(self):
         """初始化界面：创建登录区域、配置参数区域、按钮区域和日志展示区域"""
@@ -798,7 +1035,7 @@ class MainWindow(QWidget):
         self.setGeometry(100, 100, 780, 980)
         self.setMinimumSize(760, 940)
 
-        # 创建顶部登录状态区域（圆头像 + 用户名 + 状态标签）
+        # 创建顶部登录状态区域（账号槽位 + 圆头像 + 用户名 + 状态标签）
         auth_group = QGroupBox("登录")
         auth_outer_layout = QVBoxLayout()
         auth_outer_layout.setContentsMargins(20, 20, 20, 20)
@@ -809,61 +1046,18 @@ class MainWindow(QWidget):
         mini_program_label.setStyleSheet("font-size: 13px; color: #5f6368;")
         auth_outer_layout.addWidget(mini_program_label)
 
-        # 头像 + 用户信息行
-        status_row = QHBoxLayout()
-        status_row.setSpacing(16)
+        # 3个账号槽位（水平排列）
+        accounts_row = QHBoxLayout()
+        accounts_row.setSpacing(10)
+        self.profile_slots = []
+        for i in range(self.max_profiles):
+            widget = AccountSlotWidget(i, self)
+            widget.slot_clicked.connect(self._on_slot_clicked)
+            widget.slot_closed.connect(self._on_slot_closed)
+            accounts_row.addWidget(widget)
+            self.profile_slots.append(widget)
 
-        # 圆形头像
-        avatar_frame = QFrame()
-        avatar_frame.setObjectName("avatarFrame")
-        avatar_frame.setFixedSize(56, 56)
-        avatar_inner = QVBoxLayout(avatar_frame)
-        avatar_inner.setContentsMargins(0, 0, 0, 0)
-        self.avatar_label = QLabel("用")
-        self.avatar_label.setObjectName("avatarLabel")
-        self.avatar_label.setAlignment(Qt.AlignCenter)
-        avatar_inner.addWidget(self.avatar_label)
-
-        # 用户信息
-        status_meta = QVBoxLayout()
-        status_meta.setSpacing(4)
-
-        # 用户名 + 状态 chip
-        user_row = QHBoxLayout()
-        user_row.setSpacing(8)
-        self.user_name_label = QLabel("未登录")
-        self.user_name_label.setObjectName("userNameLabel")
-        self.status_chip = QLabel("未登录")
-        user_row.addWidget(self.user_name_label)
-        user_row.addWidget(self.status_chip)
-
-        # 积分
-        self.integral_label = QLabel("")
-        self.integral_label.setObjectName("integralLabel")
-        self.integral_label.setVisible(False)
-
-        status_meta.addLayout(user_row)
-        status_meta.addWidget(self.integral_label)
-
-        status_row.addWidget(avatar_frame)
-        status_row.addLayout(status_meta)
-        status_row.addStretch(1)
-
-        # 按钮行
-        buttons_row = QHBoxLayout()
-        buttons_row.setSpacing(8)
-        self.login_button = QPushButton("登录")
-        self.logout_button = QPushButton("退出登录")
-        self.login_button.setObjectName("primaryButton")
-        self.logout_button.setObjectName("logoutButton")
-        self.logout_button.setEnabled(False)
-        self.login_button.setMinimumHeight(40)
-        self.logout_button.setMinimumHeight(40)
-        buttons_row.addWidget(self.login_button)
-        buttons_row.addWidget(self.logout_button)
-
-        auth_outer_layout.addLayout(status_row)
-        auth_outer_layout.addLayout(buttons_row)
+        auth_outer_layout.addLayout(accounts_row)
         auth_group.setLayout(auth_outer_layout)
 
         # 创建配置区域
@@ -933,12 +1127,6 @@ class MainWindow(QWidget):
         button_layout.addWidget(self.daily_task_button)
         button_layout.addWidget(self.qr_code_button)
 
-        # 每日任务完成状态标签
-        self.daily_task_done_label = QLabel("✓ 每日任务已完成")
-        self.daily_task_done_label.setObjectName("dailyTaskDoneLabel")
-        self.daily_task_done_label.setAlignment(Qt.AlignCenter)
-        self.daily_task_done_label.setVisible(False)
-
         # 创建日志显示区域
         log_group = QGroupBox("运行日志")
         log_layout = QVBoxLayout()
@@ -947,7 +1135,9 @@ class MainWindow(QWidget):
         self.log_display = QTextEdit()
         self.log_display.setObjectName("logPanel")
         self.log_display.setReadOnly(True)
-        self.log_display.setMinimumHeight(220)
+        # 日志区可伸缩：窗口变大时优先给日志，避免内容被截断
+        self.log_display.setMinimumHeight(180)
+        self.log_display.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         log_layout.addWidget(self.log_display)
         log_group.setLayout(log_layout)
 
@@ -963,13 +1153,11 @@ class MainWindow(QWidget):
         main_layout.addWidget(self.stats_group)
         main_layout.addWidget(config_group)
         main_layout.addLayout(button_layout)
-        main_layout.addWidget(self.daily_task_done_label)
-        main_layout.addWidget(log_group)
+        # 日志区占据剩余空间（拉伸因子 1），其他控件固定高度
+        main_layout.addWidget(log_group, 1)
         self.setLayout(main_layout)
 
         # 连接信号和槽
-        self.login_button.clicked.connect(self.login)
-        self.logout_button.clicked.connect(self.logout)
         self.start_button.clicked.connect(self.start_program)
         self.stop_button.clicked.connect(self.stop_program)
         self.daily_task_button.clicked.connect(self.execute_daily_task)
@@ -989,13 +1177,32 @@ class MainWindow(QWidget):
         return self.user_id or login_name
 
     def has_valid_login(self):
-        """判断当前是否处于有效登录状态（已登录且表单中有 login_name 和 ses_id）"""
-        return self.is_logged_in and bool(self.login_name_edit.text().strip()) and bool(self.ses_id_edit.text().strip())
+        """判断当前 Profile 是否处于有效登录状态"""
+        auth = self._get_profile_auth()
+        return auth.get('is_logged_in', False) and bool(auth.get('login_name')) and bool(auth.get('ses_id'))
+
+    def get_logged_in_account_keys(self):
+        """收集所有已登录账号的统计标识（用于在线人数按账号计数）。
+
+        服务端按 client_id 去重，同一台机器跑多个账号时若共用一个标识，
+        在线人数永远只有 1。这里给每个账号返回独立标识。
+        """
+        keys = []
+        for profile in self.profiles:
+            auth = profile.get('auth') or {}
+            if not (auth.get('is_logged_in') and auth.get('login_name') and auth.get('ses_id')):
+                continue
+            # 优先 user_id（稳定），回退 login_name
+            key = (auth.get('user_id') or auth.get('login_name') or '').strip()
+            if key and key not in keys:
+                keys.append(key)
+        return keys
 
     def verify_session(self):
-        """调用 U005 验证当前 ses_id 是否仍有效，若失效则清除登录状态。"""
-        login_name = self.login_name_edit.text().strip()
-        ses_id = self.ses_id_edit.text().strip()
+        """调用 U005 验证当前 Profile 的 ses_id 是否仍有效，若失效则清除登录状态。"""
+        auth = self._get_profile_auth()
+        login_name = auth.get('login_name', '').strip()
+        ses_id = auth.get('ses_id', '').strip()
         if not login_name or not ses_id:
             return False
 
@@ -1004,25 +1211,37 @@ class MainWindow(QWidget):
             if user_info and user_info.get("result") == "0":
                 name = user_info.get("name") or user_info.get("sensitive_name", "")
                 if name:
+                    auth['display_name'] = name  # 更新显示名称
                     self.user_name = name
-                self.remain_integral = int(user_info.get("remain_integral", 0))
+                self.remain_integral = safe_int(user_info.get("remain_integral", 0))
+                self.save_config()  # 保存更新后的 Profile
+                self.update_profile_tabs()  # 刷新槽位：显示最新积分/姓名
                 self.refresh_login_state()
                 return True
             else:
                 self.update_log("登录会话已失效，请重新登录")
                 self._clear_login_state()
+                self.save_config()
                 self.refresh_login_state()
                 QMessageBox.warning(self, "登录已失效", "登录会话已失效，请重新登录。")
                 return False
         except Exception as e:
             self.update_log(f"验证登录状态时出错: {e}")
             self._clear_login_state()
+            self.save_config()
             self.refresh_login_state()
             QMessageBox.warning(self, "登录已失效", "验证登录状态时出错，请重新登录。")
             return False
 
     def _clear_login_state(self):
-        """清除内部登录状态但不触发界面刷新，供内部调用"""
+        """清除当前 Profile 的登录状态并刷新槽位显示"""
+        auth = self._get_profile_auth()
+        auth['is_logged_in'] = False
+        auth['user_id'] = ''
+        auth['login_name'] = ''
+        auth['ses_id'] = ''
+        auth['display_name'] = ''
+        auth['remain_integral'] = 0
         self.is_logged_in = False
         self.user_id = ""
         self.user_name = ""
@@ -1030,40 +1249,285 @@ class MainWindow(QWidget):
         AutoTicket.LOGIN_NAME_PLAINTEXT = ""
         AutoTicket.USER_ID_PLAINTEXT = ""
         AutoTicket.SES_ID = ""
+        # 刷新槽位：登录态清除后该槽位显示"点击登录"
+        if self.profile_slots:
+            self.update_profile_tabs()
 
     def refresh_login_state(self):
-        """根据登录状态更新界面 UI：头像、用户名、状态 chip、积分显示"""
-        chip_ok_style = "color: #1e8e3e; background: rgba(30, 142, 62, 0.12); border-radius: 10px; padding: 2px 10px; font-size: 11px; font-weight: 600;"
-        chip_bad_style = "color: #d93025; background: rgba(217, 48, 37, 0.12); border-radius: 10px; padding: 2px 10px; font-size: 11px; font-weight: 600;"
+        """根据登录状态刷新按钮，并把焦点交还主窗口"""
+        logged_in = self.has_valid_login()
+        self.qr_code_button.setEnabled(logged_in)
+        self._refresh_task_buttons()
+        # 登录/退出对话框关闭后焦点会残留在已销毁的窗口上，
+        # 这里主动把焦点抢回来，避免之后快捷键、输入都失效
+        try:
+            if self.isVisible():
+                self.activateWindow()
+                self.raise_()
+                self.setFocus()
+        except Exception:
+            pass
 
-        if self.has_valid_login():
-            # 头像：用户名首字符
-            name = self.user_name or "用"
-            self.avatar_label.setText(name[0])
-            self.user_name_label.setText(self.user_name or "已登录")
-            self.status_chip.setText("已登录")
-            self.status_chip.setStyleSheet(chip_ok_style)
-            # 积分
-            if self.remain_integral > 0:
-                self.integral_label.setText(f"积分 · {self.remain_integral}")
-                self.integral_label.setVisible(True)
+    # ==================== 多开 Profile 管理 ====================
+    def add_profile(self):
+        """新建账号 Profile"""
+        if len(self.profiles) >= self.max_profiles:
+            QMessageBox.information(self, "提示", f"最多只能创建 {self.max_profiles} 个账号")
+            return
+
+        new_profile = {
+            'id': f'profile_{len(self.profiles) + 1}_{int(time.time())}',
+            'name': f'账号{len(self.profiles) + 1}',
+            'auth': {'login_name': '', 'user_id': '', 'ses_id': '', 'is_logged_in': False, 'display_name': '', 'remain_integral': 0},
+            'config': {
+                'exchange_id': '10',
+                'run_time': self.get_next_run_time(),
+                'run_count': '10',
+                'time_sleep': '0.2'
+            },
+            'state': {'running': False, 'daily_task_done': False, 'daily_task_done_date': ''}
+        }
+        self.profiles.append(new_profile)
+        self.active_profile_index = len(self.profiles) - 1
+        self.update_profile_tabs()
+        self.sync_ui_from_profile()
+        self.save_config()
+        self.update_log(f"已创建 {new_profile['name']}，请登录")
+
+    def delete_profile(self, index):
+        """删除指定 Profile"""
+        if index < 0 or index >= len(self.profiles):
+            return
+        if index == self.active_profile_index:
+            QMessageBox.warning(self, "无法删除", "不能删除当前选中的账号")
+            return
+
+        profile = self.profiles[index]
+        reply = QMessageBox.question(
+            self, "删除账号",
+            f"确定删除 {profile['name']} 吗？此操作不可恢复。",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if reply != QMessageBox.Yes:
+            return
+
+        # 该账号有任务在跑则不能删除
+        pid = profile.get('id')
+        if pid in self.workers or pid in self.daily_task_workers:
+            QMessageBox.warning(self, "无法删除", "该账号有任务正在运行，请先停止后再删除。")
+            return
+
+        self.profiles.pop(index)
+        if self.active_profile_index >= len(self.profiles):
+            self.active_profile_index = max(0, len(self.profiles) - 1)
+        self.update_profile_tabs()
+        self.sync_ui_from_profile()
+        self.save_config()
+        self.update_log(f"已删除 {profile['name']}")
+
+    def switch_profile(self, index):
+        """切换到指定 Profile"""
+        if index < 0 or index >= len(self.profiles):
+            return
+        if index == self.active_profile_index:
+            return
+
+        self.active_profile_index = index
+        self.update_profile_tabs()
+        self.sync_ui_from_profile()
+        self._refresh_task_buttons()
+        self.update_log(f"已切换到 {self.profiles[index]['name']}")
+
+        # 切换后若该账号已登录，后台验证会话并刷新积分/姓名
+        auth = self._get_profile_auth()
+        if auth.get('is_logged_in') and auth.get('login_name') and auth.get('ses_id'):
+            QTimer.singleShot(100, self.verify_session)
+
+    def update_profile_tabs(self):
+        """更新3个账号槽位：已登录显示头像+信息+状态，未登录显示+号"""
+        from datetime import date
+
+        for i, widget in enumerate(self.profile_slots):
+            has_profile = i < len(self.profiles)
+            is_active = has_profile and i == self.active_profile_index
+            auth = self._get_profile_auth(self.profiles[i]) if has_profile else {}
+            is_logged_in = auth.get('is_logged_in', False)
+            widget.is_logged_in = is_logged_in
+            # 选中态：整块加蓝色描边 + 浅蓝底，明确当前操作的是哪个账号
+            widget.set_active_style(is_active)
+
+            if is_logged_in:
+                profile = self.profiles[i]
+                state = self._get_profile_state(profile)
+                name = auth.get('display_name') or auth.get('login_name') or profile.get('name', f'账号{i+1}')
+                first = name[0] if name else '用'
+                integral = safe_int(auth.get('remain_integral', 0))
+
+                # 头像样式
+                if is_active:
+                    widget.avatar_btn.setStyleSheet(
+                        "background: #1a73e8; color: #ffffff; "
+                        "border: 2px solid #1a73e8; border-radius: 32px; "
+                        "font-size: 22px; font-weight: 700; padding: 0;"
+                    )
+                else:
+                    widget.avatar_btn.setStyleSheet(
+                        "background: rgba(26, 115, 232, 0.10); color: #1a73e8; "
+                        "border: 2px solid #1a73e8; border-radius: 32px; "
+                        "font-size: 22px; font-weight: 700; padding: 0;"
+                    )
+                widget.avatar_btn.setText(first)
+
+                # 第一行：名称 | 积分（积分绿色）
+                if integral > 0:
+                    widget.name_label.setText(f'{name} <span style="color:#67C23A;">| {integral}分</span>')
+                else:
+                    widget.name_label.setText(name)
+                widget.name_label.setStyleSheet("font-size: 13px; font-weight: 600; color: #1f1f1f;")
+
+                # 第二行：每日任务完成情况
+                today = date.today().isoformat()
+                daily_done = state.get('daily_task_done_date', '') == today
+                if daily_done:
+                    widget.task_label.setText("✅ 任务完成")
+                    widget.task_label.setStyleSheet("font-size: 11px; color: #1e8e3e;")
+                else:
+                    widget.task_label.setText("❌ 任务未完成")
+                    widget.task_label.setStyleSheet("font-size: 11px; color: #9aa0a6;")
+
+                # 第三行：运行状态（该账号有存活的工作线程即显示运行中，与是否选中无关）
+                profile_running = self.profiles[i].get('id') in self.workers
+                if profile_running:
+                    widget.status_label.setText("● 运行中")
+                    widget.status_label.setStyleSheet("font-size: 10px; font-weight: 600; color: #67C23A;")
+                else:
+                    widget.status_label.setText("● 未运行")
+                    widget.status_label.setStyleSheet("font-size: 10px; font-weight: 600; color: #E6A23C;")
             else:
-                self.integral_label.setVisible(False)
-            # 按钮
-            self.logout_button.setEnabled(True)
-            self.start_button.setEnabled(True)
-            self.qr_code_button.setEnabled(True)
+                # 未登录或空槽位
+                widget.avatar_btn.setText("+")
+                widget.avatar_btn.setStyleSheet(
+                    "background: #ffffff; color: #9aa0a6; "
+                    "border: 2px dashed #dadce0; border-radius: 32px; "
+                    "font-size: 22px; font-weight: 400; padding: 0;"
+                    "\nQPushButton:hover {"
+                    "background: rgba(26, 115, 232, 0.04); color: #1a73e8; "
+                    "border-color: #1a73e8;"
+                    "}"
+                )
+                widget.name_label.setText(f"账号{i+1}")
+                widget.name_label.setStyleSheet("font-size: 13px; color: #9aa0a6;")
+                widget.task_label.setText("")
+                widget.status_label.setText("")
+
+    def _on_slot_clicked(self, index):
+        """点击槽位：已登录则切换；未登录/空槽位则切换(或新建)后直接弹登录框"""
+        if index < len(self.profiles):
+            if index != self.active_profile_index:
+                self.switch_profile(index)
         else:
-            # 未登录
-            self.avatar_label.setText("用")
-            self.user_name_label.setText("未登录")
-            self.status_chip.setText("未登录")
-            self.status_chip.setStyleSheet(chip_bad_style)
-            self.integral_label.setVisible(False)
-            # 按钮
-            self.logout_button.setEnabled(False)
-            self.start_button.setEnabled(False)
-            self.qr_code_button.setEnabled(False)
+            self.add_profile()
+
+        # 当前槽位未登录 → 直接弹出登录框
+        if not self.has_valid_login():
+            self.login()
+
+    def _on_slot_closed(self, index):
+        """点击头像红叉：切换到该账号并退出登录"""
+        if index < len(self.profiles):
+            if index != self.active_profile_index:
+                self.switch_profile(index)
+            self.logout()
+
+    def _show_profile_context_menu(self, index, pos):
+        """显示槽位右键菜单（仅对有账号且非当前的槽位提供删除）"""
+        if index >= len(self.profiles):
+            return
+        if index == self.active_profile_index:
+            return  # 当前选中的不能删除
+
+        from PyQt5.QtWidgets import QMenu
+        menu = QMenu(self)
+        delete_action = menu.addAction("删除此账号")
+        action = menu.exec_(self.profile_slots[index].mapToGlobal(pos))
+        if action == delete_action:
+            self.delete_profile(index)
+
+    def sync_ui_from_profile(self):
+        """从当前 Profile 加载数据到 UI（阻止表单信号触发反向同步）"""
+        p = self.current_profile
+        if not p:
+            return
+
+        auth = self._get_profile_auth(p)
+        config = self._get_profile_config(p)
+        state = self._get_profile_state(p)
+
+        # 阻止表单信号触发（避免 setText 触发 textChanged → save_config）
+        self.loading_config = True
+
+        try:
+            # 更新内部状态
+            self.is_logged_in = auth.get('is_logged_in', False)
+            self.user_id = auth.get('user_id', '')
+            self.user_name = auth.get('display_name', '') or auth.get('login_name', '')
+            self.remain_integral = safe_int(auth.get('remain_integral', 0))
+            self.daily_task_done_date = state.get('daily_task_done_date', '')
+
+            # 同步到 AutoTicket 全局变量（供任务使用）
+            AutoTicket.LOGIN_NAME_PLAINTEXT = auth.get('login_name', '')
+            AutoTicket.USER_ID_PLAINTEXT = auth.get('user_id', '')
+            AutoTicket.SES_ID = auth.get('ses_id', '')
+
+            # 更新表单
+            self.login_name_edit.setText(auth.get('login_name', ''))
+            self.ses_id_edit.setText(auth.get('ses_id', ''))
+
+            # 更新下拉框
+            exchange_id = config.get('exchange_id', '10')
+            idx = self.exchange_id_edit.findData(exchange_id)
+            if idx >= 0:
+                self.exchange_id_edit.setCurrentIndex(idx)
+
+            self.run_count_edit.setText(config.get('run_count', '10'))
+            self.time_sleep_edit.setText(config.get('time_sleep', '0.2'))
+        finally:
+            self.loading_config = False
+
+        # 刷新登录状态显示
+        self.refresh_login_state()
+
+    def sync_profile_from_ui(self):
+        """将 UI 数据保存回当前 Profile"""
+        p = self.current_profile
+        if not p:
+            return
+
+        auth = self._get_profile_auth(p)
+        config = self._get_profile_config(p)
+        state = self._get_profile_state(p)
+
+        # 更新 auth
+        auth['login_name'] = self.login_name_edit.text().strip()
+        auth['ses_id'] = self.ses_id_edit.text().strip()
+        auth['user_id'] = self.user_id
+        auth['is_logged_in'] = self.is_logged_in
+        auth['remain_integral'] = self.remain_integral
+
+        # 更新 config
+        config['exchange_id'] = self.exchange_id_edit.currentData()
+        config['run_count'] = self.run_count_edit.text()
+        config['time_sleep'] = self.time_sleep_edit.text()
+
+        # 更新 state
+        state['daily_task_done_date'] = self.daily_task_done_date
+
+        # 如果用户名是默认的"账号N"，更新为登录名
+        if p['name'].startswith('账号') and auth.get('login_name'):
+            new_name = auth['login_name'][:1] + '**'  # 脱敏
+            if p['name'] != new_name:
+                p['name'] = new_name
+                self.update_profile_tabs()  # 名称变了才刷新 Tab
 
     # ================= 实时统计 =================
     def build_stats_group(self):
@@ -1104,26 +1568,45 @@ class MainWindow(QWidget):
             cards_layout.addWidget(card, 1)
 
         stats_outer.addLayout(cards_layout)
+
         stats_group.setLayout(stats_outer)
         return stats_group
 
     def setup_stats(self):
-        """统计服务已配置时显示统计面板、上报上线并启动轮询"""
+        """统计服务已配置时显示统计面板，启动轮询（轮询里自带各账号心跳）
+
+        面板是否可见由服务端的 stats_enabled 开关决定，
+        首次轮询拿到结果后会自动校正（见 update_stats_display）。
+        """
         if not stats_client.is_enabled():
             self.stats_group.setVisible(False)
             return
 
-        self.stats_group.setVisible(True)
-        # 上报上线放到后台线程，避免网络请求拖慢软件启动
-        threading.Thread(target=stats_client.report_online, args=("open",), daemon=True).start()
-
-        self.stats_poller = StatsPoller(60)
+        # 先隐藏：等第一次轮询拿到服务端开关再决定，避免启动时闪出全 0 面板
+        self.stats_group.setVisible(False)
+        self.stats_poller = StatsPoller(60, account_keys_provider=self.get_logged_in_account_keys)
         self.stats_poller.stats_signal.connect(self.update_stats_display)
+        self.stats_poller.stats_failed_signal.connect(self.hide_stats_panel)
         self.stats_poller.start()
 
-    def update_stats_display(self, data):
-        """把拉取到的统计数据刷新到卡片上"""
+    def hide_stats_panel(self):
+        """拉取统计失败时隐藏面板：全 0 的统计比不显示更误导"""
         try:
+            self.stats_group.setVisible(False)
+        except Exception:
+            pass
+
+    def update_stats_display(self, data):
+        """把拉取到的统计数据刷新到卡片上，并按服务端开关控制面板显隐"""
+        try:
+            # 服务端开关：False 时隐藏整个实时统计模块
+            enabled = data.get("stats_enabled", True) is not False
+            if self.stats_group.isVisible() != enabled:
+                self.stats_group.setVisible(enabled)
+
+            if not enabled:
+                return
+
             self.stat_labels["online"].setText(str(data.get("online", 0)))
             by_type = data.get("by_type") or {}
             for key in ("9", "10", "11"):
@@ -1132,19 +1615,45 @@ class MainWindow(QWidget):
             pass
 
     def closeEvent(self, event):
-        """关闭窗口：停止后台线程并上报下线"""
+        """关闭窗口：停止后台线程、等待退出、保存配置并上报下线"""
         try:
+            self.save_config()
+        except Exception:
+            pass
+        try:
+            # 1. 停止所有可停止的线程
             if self.stats_poller:
                 self.stats_poller.stop()
-            if self.worker:
-                self.worker.stop()
+            for w in list(self.workers.values()):
+                w.stop()
+
+            # 2. 等待抢票线程退出（休眠粒度 ≤1s，stop 后 ≤1s 退出）
+            for w in list(self.workers.values()):
+                w.wait(3000)
+
+            # 3. 等待每日任务线程（工作流含多次网络调用+间隔，最长约 10s）
+            for w in list(self.daily_task_workers.values()):
+                w.wait(10000)
+
+            # 4. 等待统计轮询线程退出（fetch_stats 是网络请求）
+            if self.stats_poller:
+                self.stats_poller.wait(5000)
+
+            # 5. 等待更新检查线程退出（requests.get timeout=10s）
+            if hasattr(self, 'updater') and self.updater:
+                self.updater.wait(15000)
         except Exception:
             pass
 
         # 上报下线（超时 1 秒，失败不影响退出）
         try:
             if stats_client.is_enabled():
-                stats_client.report_offline()
+                keys = self.get_logged_in_account_keys()
+                if keys:
+                    for key in keys:
+                        stats_client.report_offline(key)
+                else:
+                    stats_client.report_offline()
         except Exception:
             pass
 
@@ -1206,18 +1715,37 @@ class MainWindow(QWidget):
                 self.update_log("登录响应缺少 login_name 或 ses_id")
                 return
 
-            self.user_id = login_result.get("user_id") or login_name
+            # 更新当前 Profile 的 auth
+            auth = self._get_profile_auth()
+            auth['login_name'] = login_name
+            auth['user_id'] = login_result.get("user_id") or login_name
+            auth['ses_id'] = ses_id
+            auth['is_logged_in'] = True
+
+            # 更新内部状态
+            self.user_id = auth['user_id']
             self.is_logged_in = True
-            self.login_name_edit.setText(login_name)
-            self.ses_id_edit.setText(ses_id)
-            self.save_config()
+
+            # 更新 AutoTicket 全局变量
+            AutoTicket.LOGIN_NAME_PLAINTEXT = login_name
+            AutoTicket.USER_ID_PLAINTEXT = auth['user_id']
+            AutoTicket.SES_ID = ses_id
+
+            # 更新表单（阻止 textChanged 触发 save_config）
+            self.loading_config = True
+            try:
+                self.login_name_edit.setText(login_name)
+                self.ses_id_edit.setText(ses_id)
+            finally:
+                self.loading_config = False
 
             # 登录成功后立即查询用户信息，获取真实姓名
             try:
                 user_info = Login.query_user_info(login_name, ses_id)
                 if user_info and user_info.get("result") == "0":
                     self.user_name = user_info.get("name") or user_info.get("sensitive_name", "")
-                    self.remain_integral = int(user_info.get("remain_integral", 0))
+                    auth['display_name'] = self.user_name  # 更新显示名称
+                    self.remain_integral = safe_int(user_info.get("remain_integral", 0))
                     self.update_log(f"欢迎, {self.user_name}  当前积分: {self.remain_integral}")
                 else:
                     self.user_name = ""
@@ -1226,19 +1754,37 @@ class MainWindow(QWidget):
                 self.user_name = ""
                 self.remain_integral = 0
 
-            self.refresh_login_state()
+            self.save_config()
+            self.update_profile_tabs()  # 更新 Tab 显示
+            self.refresh_login_state()   # 内部会把焦点交还主窗口
             self.update_log("登录成功，已自动填入 login_name 和 ses_id")
             QMessageBox.information(self, "登录成功", "登录成功，已自动填入 login_name 和 ses_id。")
         except Exception as e:
             QMessageBox.warning(self, "登录失败", str(e))
             self.update_log(f"登录失败: {str(e)}")
+            self.refresh_login_state()
 
     def logout(self):
-        """退出登录：清空表单中的登录信息并重置状态"""
-        if self.worker or self.daily_task_worker:
-            QMessageBox.warning(self, "无法退出登录", "请先停止当前任务后再退出登录。")
+        """退出登录：清空当前 Profile 的登录信息并重置状态"""
+        pid = self.current_profile.get('id') if self.current_profile else None
+        if pid in self.workers or pid in self.daily_task_workers:
+            QMessageBox.warning(self, "无法退出登录", "请先停止当前账号的任务后再退出登录。")
             return
 
+        # 只清除当前 Profile 的登录态
+        auth = self._get_profile_auth()
+        auth['is_logged_in'] = False
+        auth['user_id'] = ''
+        auth['login_name'] = ''
+        auth['ses_id'] = ''
+        auth['display_name'] = ''
+        auth['remain_integral'] = 0
+
+        state = self._get_profile_state()
+        state['daily_task_done'] = False
+        state['daily_task_done_date'] = ''
+
+        # 重置内部状态
         self.is_logged_in = False
         self.user_id = ""
         self.user_name = ""
@@ -1249,10 +1795,12 @@ class MainWindow(QWidget):
         AutoTicket.LOGIN_NAME_PLAINTEXT = ""
         AutoTicket.USER_ID_PLAINTEXT = ""
         AutoTicket.SES_ID = ""
+
         self.save_config()
+        self.update_profile_tabs()  # 刷新槽位：退出后显示"点击登录"
         self.refresh_login_state()
         self.update_log("已退出登录")
-        QMessageBox.information(self, "退出登录", "已清除本地登录状态。")
+        QMessageBox.information(self, "退出登录", "已清除当前账号的登录状态。")
 
     def show_qr_code(self):
         """获取并展示绿色出行码（token → 乘车码 → QR 码弹窗），同时查询优惠券统计并在后台记录访问量"""
@@ -1314,7 +1862,15 @@ class MainWindow(QWidget):
             self.update_log(f"绿色出行码出错: {str(e)}")
 
     def start_program(self):
-        """启动定时兑换任务：校验输入后创建工作线程 Worker 并启动"""
+        """启动当前账号的定时兑换任务（各账号独立运行，互不干扰）"""
+        p = self.current_profile
+        if not p:
+            return
+        profile_id = p.get('id')
+        if profile_id in self.workers:
+            QMessageBox.information(self, "提示", "该账号任务已在运行中。")
+            return
+
         login_name = self.login_name_edit.text()
         ses_id = self.ses_id_edit.text()
         exchange_id = self.exchange_id_edit.currentData()
@@ -1342,28 +1898,58 @@ class MainWindow(QWidget):
             QMessageBox.warning(self, "输入错误", msg)
             return
 
-        self.stop_requested = False
-        self.worker = Worker(login_name, user_id, ses_id, exchange_id, run_time_str, run_count, time_sleep)
-        self.worker.log_signal.connect(self.update_log)
-        self.worker.finished_signal.connect(self.program_finished)
-        self.worker.start()
-        
-        self.start_button.setEnabled(False)
-        self.stop_button.setEnabled(True)
+        # 更新当前 Profile 状态
+        state = self._get_profile_state()
+        state['running'] = True
+
+        # 绑定当前账号名，任务期间即使切换账号，该任务的日志仍归属原账号
+        auth = self._get_profile_auth()
+        task_owner = auth.get('display_name') or auth.get('login_name') or '未知'
+        worker_logger = lambda msg: self.update_log(msg, prefix_name=task_owner)
+
+        worker = Worker(login_name, user_id, ses_id, exchange_id, run_time_str, run_count, time_sleep)
+        worker.log_signal.connect(worker_logger)
+        # 回调中携带 profile_id，任务结束时清理对应槽位
+        worker.finished_signal.connect(lambda pid=profile_id: self.program_finished(pid))
+        self.workers[profile_id] = worker
+        worker.start()
+
+        self.update_profile_tabs()
+        self._refresh_task_buttons()
         self.update_log("程序启动中...")
-        
+
     def stop_program(self):
-        """停止正在运行的兑换任务"""
-        if self.worker:
-            self.stop_requested = True
-            self.worker.stop()
-            self.worker = None
-        self.start_button.setEnabled(True)
-        self.stop_button.setEnabled(False)
+        """停止当前账号的兑换任务（不影响其他账号）
+
+        注意：只置停止标志，不从 self.workers 移除——工作线程可能还在休眠循环中，
+        提前丢弃引用会导致 "QThread: Destroyed while thread is still running" 崩溃。
+        线程退出后由 program_finished 统一清理。
+        """
+        p = self.current_profile
+        if not p:
+            return
+        profile_id = p.get('id')
+        worker = self.workers.get(profile_id)
+        if worker:
+            self._stopped_pids.add(profile_id)
+            worker.stop()
+
+        state = self._get_profile_state()
+        state['running'] = False
+        self.update_profile_tabs()
+        self._refresh_task_buttons()
         self.update_log("程序已停止")
-        
+
     def execute_daily_task(self):
-        """执行每日任务完整工作流：登录→3次签到→评论→查询积分"""
+        """执行当前账号的每日任务完整工作流：登录→3次签到→评论→查询积分"""
+        p = self.current_profile
+        if not p:
+            return
+        profile_id = p.get('id')
+        if profile_id in self.daily_task_workers:
+            QMessageBox.information(self, "提示", "该账号每日任务正在执行中。")
+            return
+
         login_name = self.login_name_edit.text()
         ses_id = self.ses_id_edit.text()
         exchange_id = self.exchange_id_edit.currentData()
@@ -1373,105 +1959,255 @@ class MainWindow(QWidget):
             QMessageBox.warning(self, "输入错误", "LOGIN_NAME和SES_ID字段必须填写！")
             return
 
-        self.start_button.setEnabled(False)
-        self.stop_button.setEnabled(False)
-        self.daily_task_button.setEnabled(False)
+        # 绑定当前账号名，任务期间即使切换账号，日志仍归属原账号
+        auth = self._get_profile_auth()
+        task_owner = auth.get('display_name') or auth.get('login_name') or '未知'
+        daily_logger = lambda msg: self.update_log(msg, prefix_name=task_owner)
+        worker = DailyTaskWorker(login_name, user_id, ses_id, exchange_id)
+        worker.log_signal.connect(daily_logger)
+        worker.finished_signal.connect(lambda pid=profile_id: self.daily_task_finished(pid))
+        self.daily_task_workers[profile_id] = worker
+        worker.start()
+        self._refresh_task_buttons()
 
-        self.daily_task_done_label.setVisible(False)
-        self.daily_task_worker = DailyTaskWorker(login_name, user_id, ses_id, exchange_id)
-        self.daily_task_worker.log_signal.connect(self.update_log)
-        self.daily_task_worker.finished_signal.connect(self.daily_task_finished)
-        self.daily_task_worker.start()
+    def daily_task_finished(self, profile_id=None):
+        """每日任务完成后的回调：等待线程退出后清理并更新对应 Profile"""
+        if profile_id is None:
+            profile_id = self.current_profile.get('id') if self.current_profile else None
+        worker = self.daily_task_workers.pop(profile_id, None)
+        if worker:
+            # 等待线程真正退出，避免 QThread 销毁时仍在运行导致崩溃
+            worker.wait(5000)
 
-    def daily_task_finished(self):
-        """每日任务完成后的回调：恢复按钮状态"""
-        self.start_button.setEnabled(True)
-        self.stop_button.setEnabled(False)
-        self.daily_task_button.setEnabled(True)
-        self.daily_task_done_date = date.today().isoformat()
+        # 找到对应 profile 更新状态（可能不是当前选中的）
+        target = None
+        for p in self.profiles:
+            if p.get('id') == profile_id:
+                target = p
+                break
+        # 只有真正成功才标记完成（当天已签到的情况在 workflow 里已算成功）
+        ok = bool(getattr(worker, 'success', False)) if worker else False
+        if target:
+            state = self._get_profile_state(target)
+            state['daily_task_done'] = ok
+            if ok:
+                state['daily_task_done_date'] = date.today().isoformat()
+                if target is self.current_profile:
+                    self.daily_task_done_date = state['daily_task_done_date']
+            elif target is self.current_profile:
+                self.daily_task_done_date = ''
+
         self.save_config()
-        self.daily_task_done_label.setVisible(True)
-        self.update_log("每日任务执行完成")
-        self.daily_task_worker = None
-        
-    def update_log(self, message):
-        """向日志显示区域追加一条带时间戳的消息"""
+        self.update_profile_tabs()  # 刷新槽位：显示"✅ 任务完成"
+        owner = (self._get_profile_auth(target).get('display_name') or target.get('name')) if target else None
+        self.update_log(
+            "每日任务执行完成" if ok else "每日任务未全部成功，请查看上方日志",
+            prefix_name=owner,
+        )
+        self._refresh_task_buttons()
+
+    def update_log(self, message, prefix_name=None):
+        """向日志显示区域追加一条带时间戳和账号名的消息
+
+        prefix_name: 可选，指定账号名（用于后台任务日志归属原账号）；
+                     缺省时使用当前选中账号的显示名/登录名/账号名。
+        抢到票的消息加粗高亮显示。
+        """
         timestamp = QDateTime.currentDateTime().toString("yyyy-MM-dd hh:mm:ss")
-        self.log_display.append(f"[{timestamp}] {message}")
-        
-    def program_finished(self):
-        """兑换任务完成后的回调：恢复按钮状态"""
-        self.start_button.setEnabled(True)
-        self.stop_button.setEnabled(False)
-        if not self.stop_requested:
-            self.update_log("程序执行完成")
-        self.stop_requested = False
-        self.worker = None
+        if prefix_name:
+            name = prefix_name
+        else:
+            auth = self._get_profile_auth()
+            p = self.current_profile
+            name = auth.get('display_name') or auth.get('login_name') or (p.get('name', '未登录') if p else '未登录')
+        line = f"[{timestamp}] [{name}] {message}"
+        if '抢到' in str(message):
+            self.log_display.append(f'<b style="color:#67C23A;">{html.escape(line)}</b>')
+        else:
+            self.log_display.append(line)
+
+    def program_finished(self, profile_id=None):
+        """兑换任务完成后的回调：等待线程退出后清理对应账号的线程并刷新显示"""
+        if profile_id is None:
+            profile_id = self.current_profile.get('id') if self.current_profile else None
+        worker = self.workers.pop(profile_id, None)
+        if worker:
+            # 等待线程真正退出，避免 QThread 销毁时仍在运行导致崩溃
+            worker.wait(5000)
+
+        # 找到对应 profile 更新状态
+        target = None
+        for p in self.profiles:
+            if p.get('id') == profile_id:
+                target = p
+                break
+        if target:
+            self._get_profile_state(target)['running'] = False
+
+        was_stopped = profile_id in self._stopped_pids
+        self._stopped_pids.discard(profile_id)
+
+        self.update_profile_tabs()
+        self._refresh_task_buttons()
+        if not was_stopped:
+            name = (self._get_profile_auth(target).get('display_name') or target.get('name')) if target else None
+            self.update_log("程序执行完成", prefix_name=name)
+
+    def _refresh_task_buttons(self):
+        """根据当前账号的登录态与任务运行状态刷新按钮"""
+        p = self.current_profile
+        pid = p.get('id') if p else None
+        has_worker = pid in self.workers
+        has_daily = pid in self.daily_task_workers
+        busy = has_worker or has_daily
+        # 未登录就不允许启动，避免点了才弹"所有字段都必须填写"
+        logged_in = self.has_valid_login()
+
+        self.start_button.setEnabled(not busy and logged_in)
+        self.stop_button.setEnabled(has_worker)
+        self.daily_task_button.setEnabled(not busy and logged_in)
+
+    def _apply_active_profile(self):
+        """确保总有一个账号被选中：优先已登录的，其次第一个 profile
+
+        程序启动或删除账号后调用，避免出现"没有选中任何账号"导致无法抢票。
+        """
+        if not self.profiles:
+            self.active_profile_index = 0
+            return
+
+        if 0 <= self.active_profile_index < len(self.profiles):
+            # 当前索引有效，但若该账号未登录、而别的账号已登录，则切到已登录的
+            cur_auth = self._get_profile_auth(self.profiles[self.active_profile_index])
+            if cur_auth.get('is_logged_in'):
+                return
+            for i, prof in enumerate(self.profiles):
+                auth = prof.get('auth') or {}
+                if auth.get('is_logged_in') and auth.get('login_name') and auth.get('ses_id'):
+                    self.active_profile_index = i
+                    return
+            return  # 没有任何已登录账号，保持当前索引
+
+        # 索引越界，回退到第一个
+        self.active_profile_index = 0
 
     def save_config(self):
-        """将当前表单配置保存到本地 config.json 文件（loading_config 为 True 时跳过）"""
+        """将当前配置保存到本地 config.json 文件（包含所有 Profile）"""
         if self.loading_config:
             return
 
+        # 先同步当前 UI 到 Profile
+        self.sync_profile_from_ui()
+
         config = {
-            "login_name": self.login_name_edit.text(),
-            "ses_id": self.ses_id_edit.text(),
-            "user_id": self.user_id,
-            "user_name": self.user_name,
-            "is_logged_in": self.is_logged_in,
-            "exchange_id": self.exchange_id_edit.currentData(),
-            "run_count": self.run_count_edit.text(),
-            "time_sleep": self.time_sleep_edit.text(),
+            # 多开 Profile 数据
+            "profiles": self.profiles,
+            "active_profile_index": self.active_profile_index,
             # 统计相关：匿名标识与服务端地址，避免被本次写入覆盖
             "client_id": stats_client.get_client_id(),
             "stats_api_base": stats_client.get_api_base(),
-            # 每日任务完成日期（当天有效）
-            "daily_task_done_date": self.daily_task_done_date,
         }
-        with open(self.config_file, 'w', encoding='utf-8') as f:
-            json.dump(config, f, indent=4, ensure_ascii=False)
+        # 写盘失败（磁盘满、文件被占用、权限不足）不能闪退，只提示
+        try:
+            with open(self.config_file, 'w', encoding='utf-8') as f:
+                json.dump(config, f, indent=4, ensure_ascii=False)
+        except Exception as e:
+            try:
+                self.update_log(f"保存配置失败：{e}")
+            except Exception:
+                pass
         self.refresh_login_state()
-    
+
     def load_config(self):
-        """从本地 config.json 加载保存的配置（login_name、ses_id、exchange_id 等）"""
+        """从本地 config.json 加载保存的配置（支持多 Profile 和旧版单账号迁移）
+
+        配置文件损坏（断电、磁盘满、手动编辑出错）时必须能兜底，
+        否则 JSONDecodeError 会直接让程序启动即闪退。
+        """
         if os.path.exists(self.config_file):
             self.loading_config = True
             try:
                 with open(self.config_file, encoding='utf-8') as f:
                     config = json.load(f)
-                self.user_id = config.get("user_id", "")
-                self.is_logged_in = bool(config.get("is_logged_in"))
-                self.user_name = config.get("user_name", "")
-                if "login_name" in config:
-                    self.login_name_edit.setText(config["login_name"])
-                if "ses_id" in config:
-                    self.ses_id_edit.setText(config["ses_id"])
-                if "exchange_id" in config:
-                    value = config["exchange_id"]
-                    index = self.exchange_id_edit.findData(value)
-                    if index >= 0:
-                        self.exchange_id_edit.setCurrentIndex(index)
-                if "run_count" in config:
-                    self.run_count_edit.setText(config["run_count"])
-                if "time_sleep" in config:
-                    self.time_sleep_edit.setText(config["time_sleep"])
-                self.daily_task_done_date = config.get("daily_task_done_date", "")
+                if not isinstance(config, dict):
+                    raise ValueError("配置文件格式不正确（顶层不是对象）")
+
+                # 加载 Profile 列表
+                self.profiles = config.get("profiles", [])
+                if not isinstance(self.profiles, list):
+                    self.profiles = []
+                self.active_profile_index = config.get("active_profile_index", 0)
+                try:
+                    self.active_profile_index = int(self.active_profile_index)
+                except (ValueError, TypeError):
+                    self.active_profile_index = 0
+
+                # 兼容旧版：如果没有 profiles 但有 login_name，迁移为第一个 Profile
+                if not self.profiles and config.get("login_name"):
+                    migrated_profile = {
+                        'id': 'profile_1',
+                        'name': '账号1',
+                        'auth': {
+                            'login_name': config.get("login_name", ""),
+                            'user_id': config.get("user_id", ""),
+                            'ses_id': config.get("ses_id", ""),
+                            'is_logged_in': config.get("is_logged_in", False),
+                            'display_name': config.get("user_name", ""),
+                            'remain_integral': config.get("remain_integral", 0)
+                        },
+                        'config': {
+                            'exchange_id': config.get("exchange_id", "10"),
+                            'run_time': self.get_next_run_time(),
+                            'run_count': config.get("run_count", "10"),
+                            'time_sleep': config.get("time_sleep", "0.2")
+                        },
+                        'state': {
+                            'running': False,
+                            'daily_task_done': config.get("daily_task_done_date", "") == date.today().isoformat(),
+                            'daily_task_done_date': config.get("daily_task_done_date", "")
+                        }
+                    }
+                    self.profiles = [migrated_profile]
+                    self.active_profile_index = 0
+
+                # 确保索引有效
+                if self.active_profile_index >= len(self.profiles):
+                    self.active_profile_index = 0
+
+                # 程序刚启动，任何账号都不可能在运行任务 → 清除残留的运行状态标记
+                for p in self.profiles:
+                    p.setdefault('state', {})['running'] = False
+
+            except Exception as e:
+                # 配置文件损坏：备份原文件后用默认配置继续启动，不闪退
+                self.profiles = []
+                self.active_profile_index = 0
+                try:
+                    backup = self.config_file + ".corrupt"
+                    if os.path.exists(self.config_file):
+                        os.replace(self.config_file, backup)
+                except Exception:
+                    pass
+                try:
+                    self.update_log(f"配置文件读取失败，已重置为默认配置：{e}")
+                except Exception:
+                    pass
             finally:
                 self.loading_config = False
 
-        if not self.login_name_edit.text().strip() or not self.ses_id_edit.text().strip():
-            self.is_logged_in = False
-            self.user_id = ""
-            self.user_name = ""
-            self.daily_task_done_date = ""
-        self.refresh_login_state()
-
-        # 如果当天已完成每日任务，恢复显示标签
-        if self.daily_task_done_date == date.today().isoformat():
-            self.daily_task_done_label.setVisible(True)
+        # 如果没有 Profile，创建一个空的
+        if not self.profiles:
+            self.add_profile()
+        else:
+            # 默认选中一个已登录账号，避免"没选用户就运行不了"
+            self._apply_active_profile()
+            # 更新 UI
+            self.update_profile_tabs()
+            self.sync_ui_from_profile()
 
         # 如果标记已登录，启动后验证 ses_id 是否仍有效
-        if self.is_logged_in and self.login_name_edit.text().strip() and self.ses_id_edit.text().strip():
+        auth = self._get_profile_auth()
+        if auth.get('is_logged_in') and auth.get('login_name') and auth.get('ses_id'):
             QTimer.singleShot(100, self.verify_session)
 
     def get_next_run_time(self):

@@ -14,6 +14,7 @@ stats_client.py - 在线人数 / 抢票数统计上报模块
 import atexit
 import json
 import os
+import re
 import threading
 import time
 import uuid
@@ -21,8 +22,8 @@ import uuid
 import requests
 
 # ================= 配置区域 =================
-# 服务端地址，例如 "https://stats.example.com"；留空表示不启用统计功能
-DEFAULT_API_BASE = ""
+# 服务端地址；留空表示不启用统计功能（config.json 里的 stats_api_base 优先）
+DEFAULT_API_BASE = "https://www.relx5th.space"
 
 # 接口路径集中在此处，日后服务端更换路径时只改这一行
 PATH_ONLINE = "/api/v1/online"
@@ -88,6 +89,27 @@ def get_client_id():
     return _client_id
 
 
+def get_scoped_client_id(account_key=""):
+    """按账号生成的客户端标识。
+
+    在线人数按 client_id 去重，同一台机器跑多个账号时如果都用设备级 UUID，
+    服务端只会算一个人。这里把「设备标识 + 账号标识」拼起来，
+    让每个账号在服务端占独立的一条在线记录。
+
+    account_key: 账号的唯一标识（优先 user_id，其次 login_name）。
+                 为空时退回设备级 UUID（未登录状态）。
+    """
+    _ensure_ready()
+    raw = str(account_key or "").strip()
+    if not raw:
+        return _client_id
+    # 只保留服务端 client_id 允许的字符（A-Za-z0-9_-），长度截断到 64
+    safe = re.sub(r'[^A-Za-z0-9_-]', '', raw)[:24]
+    if not safe:
+        return _client_id
+    return ("%s-%s" % (_client_id[:32], safe))[:64]
+
+
 def get_api_base():
     """获取当前配置的服务端地址，未配置时返回空字符串"""
     _ensure_ready()
@@ -133,18 +155,21 @@ def _request(method, path, payload=None, timeout=TIMEOUT):
 
 
 # ================== 对外接口 ==================
-def report_online(action="open"):
+def report_online(action="open", account_key=""):
     """
     上报上线 / 下线，返回当前在线人数（失败或未配置返回 None）。
 
     action: "open" 打开软件时调用，"close" 关闭软件时调用。
+    account_key: 账号标识，用于让同一台机器上的多个账号各占一条在线记录。
+                 留空则用设备级标识。
     """
     global _is_online
     _ensure_ready()
     if not _api_base:
         return None
 
-    data = _request('POST', PATH_ONLINE, {"client_id": get_client_id(), "action": action})
+    data = _request('POST', PATH_ONLINE,
+                    {"client_id": get_scoped_client_id(account_key), "action": action})
     if action == "open":
         if data is not None:
             _is_online = True
@@ -153,34 +178,51 @@ def report_online(action="open"):
     return (data or {}).get("online")
 
 
-def report_offline():
+def report_offline(account_key=""):
     """上报下线，使用更短的超时，避免拖慢软件退出"""
     global _is_online
     _ensure_ready()
     if not _api_base:
         return None
 
-    data = _request('POST', PATH_ONLINE, {"client_id": get_client_id(), "action": "close"},
+    data = _request('POST', PATH_ONLINE,
+                    {"client_id": get_scoped_client_id(account_key), "action": "close"},
                     timeout=CLOSE_TIMEOUT)
     _is_online = False
     return (data or {}).get("online")
 
 
-def report_grab(exchange_id):
+def report_grab(exchange_id, account_key=""):
     """
     抢到票时上报一次（在后台线程执行，不会阻塞抢票）。
 
     exchange_id: "9" = 2元券，"10" = 4元券，"11" = 6元券
+    account_key: 账号标识，与在线统计保持一致
+
+    每张票都有独立的 request_id，重试时复用同一个，
+    所以服务端能精确区分「同一张票重试」和「抢到多张票」。
     """
     _ensure_ready()
     if not _api_base:
         return
-    threading.Thread(target=_report_grab_sync, args=(str(exchange_id),), daemon=True).start()
+    # request_id 在这里生成一次，整次重试链路共用
+    request_id = "g-%d-%s" % (int(time.time() * 1000), uuid.uuid4().hex[:16])
+    threading.Thread(target=_report_grab_sync,
+                     args=(str(exchange_id), account_key, request_id),
+                     daemon=True).start()
 
 
-def _report_grab_sync(exchange_id):
-    """抢票上报的实际执行体：失败后按 RETRY_DELAYS 重试，服务端会做去重"""
-    payload = {"client_id": get_client_id(), "exchange_id": exchange_id}
+def _report_grab_sync(exchange_id, account_key="", request_id=None):
+    """抢票上报的实际执行体：失败后按 RETRY_DELAYS 重试
+
+    request_id 在整个重试过程中保持不变，服务端据此幂等去重，
+    因此「网络抖动导致的重试」不会重复计数。
+    """
+    payload = {
+        "client_id": get_scoped_client_id(account_key),
+        "exchange_id": exchange_id,
+        "request_id": request_id,
+    }
     for delay in (0,) + RETRY_DELAYS:
         if delay:
             time.sleep(delay)
@@ -194,8 +236,11 @@ def fetch_stats():
     """
     拉取统计数据（只读，不改变任何数据）。
 
-    返回 {"online": int, "total": int, "by_type": {"9": int, "10": int, "11": int}}，
+    返回 {"online": int, "total": int, "by_type": {...}, "stats_enabled": bool}，
     失败或未配置返回 None。
+
+    stats_enabled 为服务端下发的开关：False 表示服务端已关闭统计功能，
+    客户端应隐藏实时统计模块。老版本服务端没有该字段时按 True 处理。
     """
     _ensure_ready()
     if not _api_base:
@@ -208,6 +253,7 @@ def fetch_stats():
         "online": int(data.get("online") or 0),
         "total": int(data.get("total") or 0),
         "by_type": {k: int(by_type.get(k) or 0) for k in ("9", "10", "11")},
+        "stats_enabled": data.get("stats_enabled", True) is not False,
     }
 
 

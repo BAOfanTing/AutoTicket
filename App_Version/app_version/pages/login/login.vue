@@ -111,7 +111,7 @@
 import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { decodeCaptchaImage, getCaptchaU067, loginU004WithCode, sendSms, loginU065 } from '../../src/services/authService'
-import { loadAuth, saveAuth } from '../../src/utils/storage'
+import { loadAuth, saveAuth, loadProfiles, saveProfiles, loadActiveProfileIndex, saveActiveProfileIndex } from '../../src/utils/storage'
 
 // ==================== 响应式状态定义 ====================
 /** 当前登录模式：'password' 密码登录 / 'sms' 短信验证码登录 */
@@ -142,6 +142,69 @@ let countdownTimer = null
 /** 是否已同意用户协议与隐私政策 */
 const agreed = ref(false)
 
+// ==================== 账号槽位 ====================
+/** 最多账号数：与 Python 版 3 个圆形头像槽位一致 */
+const MAX_PROFILES = 3
+/** 本次登录要写入的槽位索引（由主页面槽位跳转传入，-1 表示未指定） */
+let targetSlotIndex = -1
+
+// ==================== Profile 管理 ====================
+/**
+ * 将登录信息保存到目标 Profile。
+ *
+ * @param {string} loginName 账号
+ * @param {string} userId 用户 ID
+ * @param {string} sesId 会话 ID
+ * @param {object} [extra] 额外信息：displayName 真实姓名 / remainIntegral 积分
+ */
+function saveLoginToProfile(loginName, userId, sesId, extra = {}) {
+  const profiles = loadProfiles()
+  // 登录页可能由某个账号槽位跳转而来，优先写回该槽位
+  let targetIndex = typeof targetSlotIndex === 'number' && targetSlotIndex >= 0
+    ? targetSlotIndex
+    : loadActiveProfileIndex()
+
+  // 槽位不存在则按需补齐
+  while (profiles.length <= targetIndex && profiles.length < MAX_PROFILES) {
+    profiles.push({
+      id: 'profile_' + Date.now() + '_' + profiles.length,
+      name: `账号${profiles.length + 1}`,
+      auth: { loginName: '', userId: '', sesId: '', isLoggedIn: false, displayName: '', remainIntegral: 0 },
+      config: { exchangeId: '10', runTime: '', runCount: '10', timeSleep: '0.2' },
+      state: { running: false, stopRequested: false, dailyTaskRunning: false, dailyTaskDone: false, dailyTaskDoneDate: '', timerId: null },
+      logs: []
+    })
+  }
+
+  // 索引越界时回退到 0
+  if (targetIndex >= profiles.length) {
+    targetIndex = profiles.length - 1
+  }
+  if (targetIndex < 0) {
+    targetIndex = 0
+  }
+
+  const profile = profiles[targetIndex]
+  profile.auth = profile.auth || {}
+  profile.auth.loginName = loginName
+  profile.auth.userId = userId || loginName
+  profile.auth.sesId = sesId
+  profile.auth.isLoggedIn = true
+  // 真实姓名与账号标识分开保存，日志/头像都用真实姓名
+  if (extra.displayName) {
+    profile.auth.displayName = extra.displayName
+  }
+  if (typeof extra.remainIntegral === 'number') {
+    profile.auth.remainIntegral = extra.remainIntegral
+  }
+
+  saveProfiles(profiles)
+  saveActiveProfileIndex(targetIndex)
+
+  // 同时保存到全局 auth（向后兼容）
+  saveAuth({ isLoggedIn: true, loginName, userId: userId || loginName, sesId })
+}
+
 // ==================== 方法 ====================
 /** 协议勾选状态变化 */
 function onAgreementChange(e) {
@@ -154,11 +217,29 @@ function openAgreement(type) {
 }
 
 /**
- * 初始化页面：检查本地是否有有效登录态，有则直接跳转主页，否则加载验证码
+ * 初始化页面：检查是否有已登录的 Profile。
+ *
+ * 由主页面某个"空账号槽位"跳转而来时（targetSlotIndex >= 0），
+ * 说明用户是要给新槽位登录，不能直接跳回主页，必须停留在此页输入账号。
  */
 async function initPage() {
-  const auth = loadAuth()
-  if (auth && auth.isLoggedIn && auth.loginName && auth.sesId) {
+  const profiles = loadProfiles()
+  const hasLoggedInProfile = profiles.some(p => p.auth && p.auth.isLoggedIn && p.auth.loginName && p.auth.sesId)
+
+  // 目标是给某个空槽位登录：即使已有其他账号登录，也要停留本页
+  if (targetSlotIndex >= 0) {
+    const slot = profiles[targetSlotIndex]
+    const slotLoggedIn = Boolean(slot && slot.auth && slot.auth.isLoggedIn && slot.auth.loginName && slot.auth.sesId)
+    if (!slotLoggedIn) {
+      await refreshCaptcha()
+      return
+    }
+    // 该槽位已登录，直接回主页
+    uni.redirectTo({ url: `/pages/main/main?slot=${targetSlotIndex}` })
+    return
+  }
+
+  if (hasLoggedInProfile) {
     uni.redirectTo({ url: '/pages/main/main' })
     return
   }
@@ -271,15 +352,11 @@ async function submitLogin() {
       uni.showToast({ title: '请先同意用户服务协议和隐私政策', icon: 'none' })
       return
     }
-    saveAuth({
-      isLoggedIn: true,
-      loginName: 'admin',
-      userId: 'admin',
-      sesId: 'test_ses_id'
-    })
+    saveLoginToProfile('admin', 'admin', 'test_ses_id', { displayName: '测试管理员', remainIntegral: 999 })
     uni.showToast({ title: '测试登录成功', icon: 'success' })
     setTimeout(() => {
-      uni.redirectTo({ url: '/pages/main/main' })
+      const slotQuery = targetSlotIndex >= 0 ? `?slot=${targetSlotIndex}` : ''
+      uni.redirectTo({ url: `/pages/main/main${slotQuery}` })
     }, 300)
     return
   }
@@ -349,18 +426,21 @@ async function submitLogin() {
       return
     }
 
-    // 保存登录态到本地存储
-    saveAuth({
-      isLoggedIn: true,
-      loginName,
-      userId,
-      sesId
-    })
+    // 登录响应里若带真实姓名/积分，一并写入该账号
+    const displayName = result.name || result.sensitive_name || ''
+    const integral = parseInt(result.remain_integral)
+    const extra = {}
+    if (displayName) extra.displayName = displayName
+    if (Number.isFinite(integral)) extra.remainIntegral = integral
+
+    // 保存登录态到目标账号槽位
+    saveLoginToProfile(loginName, userId, sesId, extra)
 
     uni.showToast({ title: '登录成功', icon: 'success' })
-    // 延迟跳转以显示 Toast
+    // 延迟跳转以显示 Toast；带上槽位参数，让主页选中刚登录的账号
     setTimeout(() => {
-      uni.redirectTo({ url: '/pages/main/main' })
+      const slotQuery = targetSlotIndex >= 0 ? `?slot=${targetSlotIndex}` : ''
+      uni.redirectTo({ url: `/pages/main/main${slotQuery}` })
     }, 300)
   } catch (error) {
     uni.showToast({ title: error.message || '登录失败', icon: 'none' })
@@ -372,7 +452,14 @@ async function submitLogin() {
 
 // ==================== 生命周期 ====================
 /** 页面加载时初始化，检查登录态并加载验证码 */
-onLoad(() => {
+onLoad((options) => {
+  // 记录由主页面某个账号槽位指定的目标位置
+  if (options && options.slot !== undefined && options.slot !== '') {
+    const parsed = Number(options.slot)
+    if (Number.isFinite(parsed) && parsed >= 0) {
+      targetSlotIndex = parsed
+    }
+  }
   initPage()
 })
 </script>

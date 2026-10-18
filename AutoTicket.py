@@ -26,6 +26,32 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # 以下为 App 服务端通信所需的参数、密钥和运行时配置
 CHANNEL = "02"
 APP_VER_NO = "3.1.7"
+
+# ============ 线程本地运行态（支持多账号并发任务） ============
+# 每个 Worker 线程在运行时通过 set_thread_context() 写入自己的凭证与日志回调，
+# build_payload / 日志输出等读取时优先取线程本地值，取不到再回退到模块全局值，
+# 从而避免多账号同时跑任务时凭证、日志互相覆盖串号。
+import threading as _threading
+_thread_ctx = _threading.local()
+
+def set_thread_context(login_name=None, user_id=None, ses_id=None, exchange_id=None, log_cb=None):
+    """在当前线程内设置账号上下文（不影响其他线程）。"""
+    if login_name is not None: _thread_ctx.login_name = login_name
+    if user_id is not None: _thread_ctx.user_id = user_id
+    if ses_id is not None: _thread_ctx.ses_id = ses_id
+    if exchange_id is not None: _thread_ctx.exchange_id = exchange_id
+    if log_cb is not None: _thread_ctx.log_cb = log_cb
+
+def clear_thread_context():
+    """清除当前线程的账号上下文。"""
+    for attr in ('login_name', 'user_id', 'ses_id', 'exchange_id', 'log_cb'):
+        if hasattr(_thread_ctx, attr):
+            delattr(_thread_ctx, attr)
+
+def _ctx(name, default):
+    """读取线程本地值，没有则回退到模块全局默认值。"""
+    return getattr(_thread_ctx, name, default)
+
 SES_ID = ""
 LOGIN_NAME_PLAINTEXT = ""
 USER_ID_PLAINTEXT = ""
@@ -115,16 +141,21 @@ def build_payload():
     返回:
         dict: 包含 key、sign 等字段的完整请求体
     """
-    # 1. 准备所有参数
+    # 1. 准备所有参数（优先取线程本地上下文，支持多账号并发）
+    _login_name = _ctx('login_name', LOGIN_NAME_PLAINTEXT)
+    _user_id = _ctx('user_id', USER_ID_PLAINTEXT)
+    _ses_id = _ctx('ses_id', SES_ID)
+    _exchange_id = _ctx('exchange_id', EXCHANGE_ID_PLAINTEXT)
+
     payload = {
         "channel": CHANNEL,
         "app_ver_no": APP_VER_NO,
         "timestamp": int(time.time() * 1000)
     }
-    if LOGIN_NAME_PLAINTEXT: payload["login_name"] = LOGIN_NAME_PLAINTEXT
-    if USER_ID_PLAINTEXT: payload["user_id"] = USER_ID_PLAINTEXT
-    if SES_ID: payload["ses_id"] = SES_ID
-    payload["exchange_id"] = EXCHANGE_ID_PLAINTEXT
+    if _login_name: payload["login_name"] = _login_name
+    if _user_id: payload["user_id"] = _user_id
+    if _ses_id: payload["ses_id"] = _ses_id
+    payload["exchange_id"] = _exchange_id
 
     # 2. 过滤空值 (模拟JS的M()函数)
     filtered_payload = {}
@@ -222,10 +253,8 @@ def decrypt_data2(data2):
     decrypted = pkcs7_unpad(decrypted)
     return decrypted.decode()
 
-# 创建全局 Session 对象，复用 TCP 连接减少开销
-session = requests.Session()
-# 设置默认请求头
-headers = {
+# 请求头模板
+_DEFAULT_HEADERS = {
         "Host": "app.hzgh.org.cn",
         "Connection": "keep-alive",
         "Accept": "application/json, text/plain, */*",
@@ -237,7 +266,21 @@ headers = {
         "Accept-Encoding": "gzip, deflate",
         "Accept-Language": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7"
     }
-session.headers.update(headers)
+
+# Session 按线程隔离（requests.Session 非线程安全），每个线程首次使用时创建
+_session_local = _threading.local()
+
+def _get_session():
+    """获取当前线程的 requests.Session，没有则创建。"""
+    s = getattr(_session_local, 'session', None)
+    if s is None:
+        s = requests.Session()
+        s.headers.update(_DEFAULT_HEADERS)
+        _session_local.session = s
+    return s
+
+# 兼容旧代码里的全局 session 引用（主线程使用）
+session = _get_session()
 
 # ================== 日志系统 ==================
 # 支持通过回调将日志输出到 GUI 界面
@@ -254,12 +297,55 @@ def set_log_callback(callback):
     log_callback = callback
 
 def log_print(*args, **kwargs):
-    """自定义日志输出函数：若有回调则发送给 GUI，否则直接打印到控制台"""
-    if log_callback:
+    """自定义日志输出函数：优先发送到当前线程注册的回调（多账号并发时各自归属），
+    否则发送到全局回调，最后回退到控制台打印"""
+    cb = _ctx('log_cb', None) or log_callback
+    if cb:
         message = ' '.join(str(arg) for arg in args)
-        log_callback(message)
+        cb(message)
     else:
         print(*args, **kwargs)
+
+# 虽然 result 非 0，但业务上等同「已完成」的提示语。
+# 典型场景：当天已签到过，或被其他设备/上次运行完成了签到，
+# 接口返回「该积分规则当日已到积分上限次数」——这不是失败，是任务本来就已经做完了。
+ALREADY_DONE_KEYWORDS = (
+    "已到积分上限",
+    "已达积分上限",
+    "已签到",
+    "重复签到",
+    "已经签到",
+    "今日已完成",
+    "已经完成",
+    "已评论",
+)
+
+
+def is_already_done_msg(msg):
+    """判断一段提示语是否表示「本操作此前已完成」"""
+    text = str(msg or "")
+    if not text:
+        return False
+    return any(k in text for k in ALREADY_DONE_KEYWORDS)
+
+
+def _parse_result_obj(decrypted_json_str):
+    """把解密后的响应解析成 dict，失败返回 None"""
+    try:
+        data = json.loads(decrypted_json_str)
+    except Exception:
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def is_step_ok(step):
+    """判断单步结果是否等效成功：result == '0'，或提示语表示「此前已完成」"""
+    if not isinstance(step, dict):
+        return False
+    if str(step.get("result", "")) == "0":
+        return True
+    return is_already_done_msg(step.get("msg"))
+
 
 def format_result_text(decrypted_json_str, action="操作"):
     """
@@ -289,14 +375,12 @@ def format_result_text(decrypted_json_str, action="操作"):
             if data.get("total_integral") is not None:
                 parts.append(f"总积分: {data['total_integral']}")
         return "  ".join(parts)
-    else:
-        return f"{action}: 失败" + (f" - {msg}" if msg else "")
+    # 当天已签到/已到上限这类，业务上等同于已完成，不显示"失败"以免误导
+    if is_already_done_msg(msg):
+        return f"{action}: 已完成（{msg}）"
+    return f"{action}: 失败" + (f" - {msg}" if msg else "")
 
 # ================== 兑换任务 ==================
-# 本轮任务是否已上报过抢票成功（避免同一轮里多个线程重复上报）
-_grab_reported = False
-_grab_lock = threading.Lock()
-
 
 def extract_response_msg(decrypted_json):
     """
@@ -333,10 +417,8 @@ def is_exchange_success(decrypted_json):
 
 def run_exchange():
     """执行一次兑换操作：构造加密请求 → 发起 POST → 解密 → 判断是否抢到并上报统计"""
-    global _grab_reported
-
     payload = build_payload()
-    resp = session.post(URL, json=payload, verify=False)
+    resp = _get_session().post(URL, json=payload, verify=False)
 
     try:
         resp_json = resp.json()
@@ -344,33 +426,55 @@ def run_exchange():
             decrypted_json = decrypt_data2(resp_json["data2"])
             log_print(decrypted_json)  # 替换原来的print
 
-            # 抢到票时上报统计（同一轮任务只上报一次）
+            # 抢到票就上报，每张票都算。
+            # 一轮任务开 12 个并发线程、间隔 0.15 秒，2 秒内抢到 2 张同面额的券
+            # 是完全可能的，因此这里不做"一轮只报一次"的合并，否则会少算。
+            # 重试导致重复计数的问题由 request_id 幂等键在服务端解决。
             if is_exchange_success(decrypted_json):
-                with _grab_lock:
-                    should_report = not _grab_reported
-                    _grab_reported = True
-                if should_report:
-                    log_print("🎉 抢到票了！正在上报统计...")
-                    stats_client.report_grab(EXCHANGE_ID_PLAINTEXT)
+                log_print("🎉 抢到票了！正在上报统计...")
+                # 带上账号标识，与在线统计的 client_id 计算方式保持一致
+                _account_key = (_ctx('user_id', '') or _ctx('login_name', LOGIN_NAME_PLAINTEXT) or '')
+                stats_client.report_grab(_ctx('exchange_id', EXCHANGE_ID_PLAINTEXT), _account_key)
         else:
             log_print("返回中没有 data2 字段")  # 替换原来的print
     except Exception as e:
         log_print("解密失败:", e)  # 替换原来的print
 
 # 修改job函数中的print语句
-def job():
-    """使用线程池并发执行多次兑换任务，每次请求之间间隔 timeSleep 秒"""
-    global _grab_reported
-    _grab_reported = False
+def job(run_count=None, time_sleep=None):
+    """使用线程池并发执行多次兑换任务，每次请求之间间隔 time_sleep 秒
+
+    run_count / time_sleep 为 None 时回退到模块全局值（兼容 CLI 入口）。
+    多账号并发时必须显式传入，避免全局变量被其他线程覆盖。
+    """
+    _run_count = run_count if run_count is not None else RUN_COUNT
+    _time_sleep = time_sleep if time_sleep is not None else timeSleep
+
+    # 捕获当前线程的账号上下文，传播给线程池中的工作线程
+    _snapshot = {
+        'login_name': _ctx('login_name', LOGIN_NAME_PLAINTEXT),
+        'user_id': _ctx('user_id', USER_ID_PLAINTEXT),
+        'ses_id': _ctx('ses_id', SES_ID),
+        'exchange_id': _ctx('exchange_id', EXCHANGE_ID_PLAINTEXT),
+        'log_cb': _ctx('log_cb', None),
+    }
+
+    def _run_exchange_with_ctx():
+        """在线程池线程内恢复账号上下文后执行兑换"""
+        set_thread_context(**_snapshot)
+        try:
+            run_exchange()
+        finally:
+            clear_thread_context()
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=12) as executor:
-        log_print(USER_ID_PLAINTEXT)
-        log_print(LOGIN_NAME_PLAINTEXT)
-        log_print(SES_ID)
-        for i in range(RUN_COUNT):
+        log_print(_snapshot['user_id'])
+        log_print(_snapshot['login_name'])
+        log_print(_snapshot['ses_id'])
+        for i in range(_run_count):
             log_print(f"准备启动第{i+1}个线程，时间：{datetime.now()}")  # 替换原来的print
-            executor.submit(run_exchange)
-            time.sleep(timeSleep)
+            executor.submit(_run_exchange_with_ctx)
+            time.sleep(_time_sleep)
 
 # 模拟JavaScript版本的每日任务功能
 def daily_task_login():
@@ -379,8 +483,8 @@ def daily_task_login():
         "channel": CHANNEL,
         "app_ver_no": "3.1.4",  # 使用与JavaScript版本相同的版本号
         "timestamp": int(time.time() * 1000),
-        "login_name": LOGIN_NAME_PLAINTEXT,
-        "ses_id": SES_ID
+        "login_name": _ctx('login_name', LOGIN_NAME_PLAINTEXT),
+        "ses_id": _ctx('ses_id', SES_ID)
     }
     # 添加登录特定参数（参考JavaScript版本的functions.login）
     payload.update({
@@ -426,16 +530,17 @@ def daily_task_login():
 
     # 使用登录端点URL
     login_url = BASE_URL + ENDPOINTS['dailyLogin']
-    resp = session.post(login_url, json=payload, verify=False)
+    resp = _get_session().post(login_url, json=payload, verify=False)
     try:
         resp_json = resp.json()
         if "data2" in resp_json:
             decrypted_json = decrypt_data2(resp_json["data2"])
             log_print(format_result_text(decrypted_json, "登录"))
-        else:
-            log_print("登录响应中没有 data2 字段")
+            return _parse_result_obj(decrypted_json)
+        log_print("登录响应中没有 data2 字段")
     except Exception as e:
         log_print(f"登录请求失败: {e}")
+    return None
 
 def daily_task_signin(signin_number=1):
     """每日任务之签到：发送签到请求到 U042 端点（与登录同端点，type 不同）"""
@@ -443,8 +548,8 @@ def daily_task_signin(signin_number=1):
         "channel": CHANNEL,
         "app_ver_no": "3.1.4",  # 使用与JavaScript版本相同的版本号
         "timestamp": int(time.time() * 1000),
-        "login_name": LOGIN_NAME_PLAINTEXT,
-        "ses_id": SES_ID
+        "login_name": _ctx('login_name', LOGIN_NAME_PLAINTEXT),
+        "ses_id": _ctx('ses_id', SES_ID)
     }
     # 添加签到特定参数（参考JavaScript版本的functions.signin）
     payload.update({
@@ -490,16 +595,17 @@ def daily_task_signin(signin_number=1):
 
     # 使用签到端点URL
     signin_url = BASE_URL + ENDPOINTS['signin']
-    resp = session.post(signin_url, json=payload, verify=False)
+    resp = _get_session().post(signin_url, json=payload, verify=False)
     try:
         resp_json = resp.json()
         if "data2" in resp_json:
             decrypted_json = decrypt_data2(resp_json["data2"])
             log_print(format_result_text(decrypted_json, f"第{signin_number}次签到"))
-        else:
-            log_print("签到响应中没有 data2 字段")
+            return _parse_result_obj(decrypted_json)
+        log_print("签到响应中没有 data2 字段")
     except Exception as e:
         log_print(f"签到请求失败: {e}")
+    return None
 
 def daily_task_comment():
     """每日任务之评论：发送评论请求到 AC08 端点"""
@@ -507,8 +613,8 @@ def daily_task_comment():
         "channel": CHANNEL,
         "app_ver_no": "3.1.4",  # 使用与JavaScript版本相同的版本号
         "timestamp": int(time.time() * 1000),
-        "login_name": LOGIN_NAME_PLAINTEXT,
-        "ses_id": SES_ID
+        "login_name": _ctx('login_name', LOGIN_NAME_PLAINTEXT),
+        "ses_id": _ctx('ses_id', SES_ID)
     }
     # 添加评论特定参数（参考JavaScript版本的functions.comment）
     payload.update({
@@ -558,16 +664,17 @@ def daily_task_comment():
 
     # 使用评论端点URL
     comment_url = BASE_URL + ENDPOINTS['comment']
-    resp = session.post(comment_url, json=payload, verify=False)
+    resp = _get_session().post(comment_url, json=payload, verify=False)
     try:
         resp_json = resp.json()
         if "data2" in resp_json:
             decrypted_json = decrypt_data2(resp_json["data2"])
             log_print(format_result_text(decrypted_json, "评论"))
-        else:
-            log_print("评论响应中没有 data2 字段")
+            return _parse_result_obj(decrypted_json)
+        log_print("评论响应中没有 data2 字段")
     except Exception as e:
         log_print(f"评论请求失败: {e}")
+    return None
 
 def daily_task_query():
     """每日任务之查询积分：发送查询请求到 U005 端点"""
@@ -575,8 +682,8 @@ def daily_task_query():
         "channel": CHANNEL,
         "app_ver_no": "3.1.4",  # 使用与JavaScript版本相同的版本号
         "timestamp": int(time.time() * 1000),
-        "login_name": LOGIN_NAME_PLAINTEXT,
-        "ses_id": SES_ID
+        "login_name": _ctx('login_name', LOGIN_NAME_PLAINTEXT),
+        "ses_id": _ctx('ses_id', SES_ID)
     }
     # 添加查询特定参数（参考JavaScript版本的functions.query）
     # 查询功能不需要额外参数
@@ -620,16 +727,17 @@ def daily_task_query():
 
     # 使用查询端点URL
     query_url = BASE_URL + ENDPOINTS['query']
-    resp = session.post(query_url, json=payload, verify=False)
+    resp = _get_session().post(query_url, json=payload, verify=False)
     try:
         resp_json = resp.json()
         if "data2" in resp_json:
             decrypted_json = decrypt_data2(resp_json["data2"])
             log_print(format_result_text(decrypted_json, "查询积分"))
-        else:
-            log_print("查询积分响应中没有 data2 字段")
+            return _parse_result_obj(decrypted_json)
+        log_print("查询积分响应中没有 data2 字段")
     except Exception as e:
         log_print(f"查询积分请求失败: {e}")
+    return None
 
 def daily_task_workflow():
     """
@@ -637,39 +745,57 @@ def daily_task_workflow():
 
     流程: 登录 → 3 次签到 → 评论 → 查询积分
     每个步骤之间间隔 1 秒，避免请求过快被限流。
+
+    返回:
+        bool: 所有步骤是否都等效成功。当天已签到（返回"已到积分上限"）
+              也算成功，避免重复执行时被误判为失败。
     """
     log_print("🎯 开始执行每日任务工作流")
     log_print("=" * 40)
     log_print("工作流: 登录 → 3次签到 → 评论 → 查询积分")
     log_print("=" * 40)
-    
+
+    steps = []
+
     try:
         # 执行登录
         log_print("\n🔄 开始执行登录...")
-        daily_task_login()
+        steps.append(daily_task_login())
         time.sleep(1)  # 等待1秒
-        
+
         # 执行3次签到
         log_print("\n🔄 开始执行3次签到...")
         for i in range(1, 4):
             log_print(f"\n第 {i} 次签到:")
-            daily_task_signin(i)
+            steps.append(daily_task_signin(i))
             time.sleep(1)  # 等待1秒
-        
+
         # 执行评论
         log_print("\n🔄 开始执行评论...")
-        daily_task_comment()
+        steps.append(daily_task_comment())
         time.sleep(1)  # 等待1秒
-        
+
         # 执行查询积分
         log_print("\n🔄 开始查询积分...")
-        daily_task_query()
-        
-        log_print("\n🎉 每日任务工作流执行完成!")
+        steps.append(daily_task_query())
+
+        all_ok = bool(steps) and all(is_step_ok(s) for s in steps)
+        if all_ok:
+            log_print("\n🎉 每日任务工作流执行完成!")
+        else:
+            log_print("\n⚠️ 每日任务有步骤未成功，请查看上方日志")
         log_print("=" * 40)
-        
+        return all_ok
+
     except Exception as e:
         log_print(f"❌ 每日任务执行失败: {e}")
+        return False
+        log_print("=" * 40)
+        return all_ok
+
+    except Exception as e:
+        log_print(f"❌ 每日任务执行失败: {e}")
+        return False
 
 # ================== 服务器时间同步 ==================
 # 与小程序版一致：通过查询接口响应头 Date 字段获取服务器时间，
@@ -685,8 +811,8 @@ def sync_server_time():
         "channel": CHANNEL,
         "app_ver_no": "3.1.4",  # 使用与JavaScript版本相同的版本号
         "timestamp": int(time.time() * 1000),
-        "login_name": LOGIN_NAME_PLAINTEXT,
-        "ses_id": SES_ID
+        "login_name": _ctx('login_name', LOGIN_NAME_PLAINTEXT),
+        "ses_id": _ctx('ses_id', SES_ID)
     }
 
     # 过滤空值
@@ -728,7 +854,7 @@ def sync_server_time():
     # 发送查询请求并读取响应头 Date 字段
     query_url = BASE_URL + ENDPOINTS['query']
     local_start = int(time.time() * 1000)
-    resp = session.post(query_url, json=payload, verify=False)
+    resp = _get_session().post(query_url, json=payload, verify=False)
     local_end = int(time.time() * 1000)
 
     date_header = resp.headers.get("Date")

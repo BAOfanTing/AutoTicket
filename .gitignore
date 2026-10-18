@@ -12,3 +12,4 @@ _status.sh
 _runcmd.cmd
 _*.sh
 _*.cmd
+_rl_test.py

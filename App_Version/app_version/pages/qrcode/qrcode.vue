@@ -93,8 +93,18 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { loadAuth } from '../../src/utils/storage'
+import { loadProfiles, loadActiveProfileIndex } from '../../src/utils/storage'
 import { getGreenTravelCode, getSubwayTicketRecords } from '../../src/services/qrService'
+
+// ==================== 工具 ====================
+/** 获取当前选中 Profile 的登录态 */
+function getCurrentAuth() {
+  const profiles = loadProfiles()
+  const idx = loadActiveProfileIndex()
+  const p = profiles[idx]
+  if (!p || !p.auth || !p.auth.isLoggedIn) return null
+  return { loginName: p.auth.loginName, sesId: p.auth.sesId, userId: p.auth.userId }
+}
 
 // ==================== 响应式状态定义 ====================
 /** 是否正在加载数据 */
@@ -141,7 +151,11 @@ function formatDeadtime(ts) {
  * 获取当前选中券类型的地铁优惠券统计与记录
  */
 async function fetchSubwayInfo() {
-  const auth = loadAuth()
+  const auth = getCurrentAuth()
+  if (!auth) {
+    error.value = '登录状态已失效，请重新登录'
+    return
+  }
   const subwayData = await getSubwayTicketRecords(auth.loginName, auth.sesId, activeAwardType.value)
 
   subwayInfo.value = {
@@ -174,8 +188,8 @@ async function switchAwardType(type) {
  * 获取绿色出行二维码并查询地铁优惠券统计
  */
 async function fetchQrCode() {
-  const auth = loadAuth()
-  if (!auth || !auth.isLoggedIn || !auth.loginName || !auth.sesId) {
+  const auth = getCurrentAuth()
+  if (!auth) {
     error.value = '登录状态已失效，请重新登录'
     loading.value = false
     return
